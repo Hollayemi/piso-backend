@@ -31,7 +31,7 @@ app.use(hpp()); // Prevent HTTP parameter pollution
 
 // CORS configuration
 const corsOptions = {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+    origin: process.env.ALLOWED_ORIGINS?.split(',').push("https://piso-demo.vercel.app/") || ['http://localhost:3000', 'https://piso-demo.vercel.app/'],
     credentials: true,
     optionsSuccessStatus: 200
 };
