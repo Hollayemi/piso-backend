@@ -183,8 +183,8 @@ const admissionSchema = Joi.object({
     contact: Joi.object({
         correspondenceEmail: Joi.string().email().lowercase().required(),
         howDidYouKnow: Joi.string()
-            .valid('Social Media', 'Friend/Family', 'Website', 'Advertisement', 'Former Student', 'Other')
-            .required()
+            // .valid("",'Social Media', 'Friend/Family', 'Website', 'Advertisement', 'Former Student', 'Other')
+            .allow("")
     }).required()
 });
 

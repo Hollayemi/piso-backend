@@ -221,8 +221,8 @@ const AdmissionSchema = new mongoose.Schema({
         },
         howDidYouKnow: {
             type: String,
-            required: [true, 'Please tell us how you heard about us'],
-            enum: ['Social Media', 'Friend/Family', 'Website', 'Advertisement', 'Former Student', 'Other']
+            required: [false, 'Please tell us how you heard about us'],
+            // enum: ['Social Media', 'Friend/Family', 'Website', 'Advertisement', 'Former Student', 'Other']
         }
     },
 
