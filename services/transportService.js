@@ -17,7 +17,7 @@ const BusRoute       = require('../model/busRoute.model');
 const BusEnrollment  = require('../model/busEnrollment.model');
 const SpecialTrip    = require('../model/specialTrip.model');
 const TripEnrollment = require('../model/tripEnrollment.model');
-const ErrorResponse  = require('../../utils/errorResponse');
+const ErrorResponse  = require('../utils/errorResponse');
 
 // ─── Term helper ──────────────────────────────────────────────────────────────
 

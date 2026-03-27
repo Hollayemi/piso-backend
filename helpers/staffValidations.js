@@ -1,6 +1,6 @@
 const Joi = require('joi');
-const { STAFF_TYPES, STAFF_STATUSES } = require('../model/staff');
-const { PAY_STATUSES } = require('../model/payroll');
+const { STAFF_TYPES, STAFF_STATUSES } = require('../model/staff.model');
+const { PAY_STATUSES } = require('../model/payroll.model');
 
 // ─── Reusable validators ──────────────────────────────────────────────────────
 

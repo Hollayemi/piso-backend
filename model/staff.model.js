@@ -278,6 +278,10 @@ const StaffSchema = new mongoose.Schema(
             type:   String,
             select: false, // Never returned in queries by default
         },
+       mustResetPassword: {
+         type:    Boolean,
+          default: false,
+      },
 
         // ── Documents ─────────────────────────────────────────────────────
         documents: {

@@ -20,7 +20,7 @@
 const asyncHandler    = require('../middleware/asyncHandler');
 const ErrorResponse   = require('../utils/errorResponse');
 const { sendSuccess } = require('../utils/sendResponse');
-const transportService = require('./services/transportService');
+const transportService = require('../services/transportService');
 
 const {
     validate,
@@ -32,7 +32,7 @@ const {
     tripQuerySchema,
     createTripSchema,
     updateTripSchema,
-} = require('./helpers/transportValidations');
+} = require('../helpers/transportValidations');
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 

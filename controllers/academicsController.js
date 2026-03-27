@@ -20,9 +20,9 @@ const asyncHandler  = require('../middleware/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const { sendSuccess } = require('../utils/sendResponse');
 
-const classService     = require('./services/classService');
-const subjectService   = require('./services/subjectService');
-const timetableService = require('./services/timetableService');
+const classService     = require('../services/classService');
+const subjectService   = require('../services/subjectService');
+const timetableService = require('../services/timetableService');
 
 const {
     validate,
@@ -34,7 +34,7 @@ const {
     saveCellSchema,
     clearCellSchema,
     clearTimetableSchema,
-} = require('./helpers/academicsValidations');
+} = require('../helpers/academicsValidations');
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 

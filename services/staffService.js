@@ -12,9 +12,9 @@ const path   = require('path');
 const fs     = require('fs').promises;
 const bcrypt = require('bcryptjs');
 
-const Staff   = require('../model/staff');
-const Payroll = require('../model/payroll');
-const { MONTH_NAMES } = require('../model/payroll');
+const Staff   = require('../model/staff.model');
+const Payroll = require('../model/payroll.model');
+const { MONTH_NAMES } = require('../model/payroll.model');
 const ErrorResponse   = require('../utils/errorResponse');
 
 // ─── Constants ────────────────────────────────────────────────────────────────

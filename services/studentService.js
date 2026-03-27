@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
-const Student = require('../model/student');
+const Student = require('../model/student.model');
 const ErrorResponse = require('../utils/errorResponse');
 
 // ─── ID Generation ────────────────────────────────────────────────────────────

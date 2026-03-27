@@ -13,8 +13,7 @@ const path = require('path');
 // Load env vars
 dotenv.config();
 
-// Import routes
-const admissionRoutes = require('./routes/students');
+
 const errorHandler = require('./middleware/errorHandler');
 const connectDB = require('./config/database');
 
@@ -84,8 +83,29 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+
+// Import routes
+const admissionRoutes = require('./routes/students');
+const authRoutes     = require('./routes/authRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
+const studentRoutes   = require('./routes/studentRoutes');
+const staffRoutes     = require('./routes/staffRoutes');
+const academicsRoutes = require('./routes/academicsRoutes');
+const financeRoutes   = require('./routes/financeRoutes');
+const inventoryRoutes = require('./routes/inventoryRoutes');
+const transportRoutes = require('./routes/transportRoutes');
+
 // Mount routes
 app.use('/api/v1/admissions', submissionLimiter, admissionRoutes);
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/settings', settingsRoutes);
+app.use('/api/v1/students',  studentRoutes);
+app.use('/api/v1/staff',     staffRoutes);
+app.use('/api/v1/academics', academicsRoutes);
+app.use('/api/v1/finance',   financeRoutes);
+app.use('/api/v1/inventory', inventoryRoutes);
+app.use('/api/v1/transport', transportRoutes);
+
 
 // 404 handler
 app.use((req, res) => {

@@ -11,7 +11,7 @@
 const Timetable   = require('../model/timetable.model');
 const Class       = require('../model/class.model');
 const Subject     = require('../model/subject.model');
-const ErrorResponse = require('../../utils/errorResponse');
+const ErrorResponse = require('../utils/errorResponse');
 
 const {
     DAYS_OF_WEEK,

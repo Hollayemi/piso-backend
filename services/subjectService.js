@@ -9,7 +9,7 @@
 
 const Subject     = require('../model/subject.model');
 const Timetable   = require('../model/timetable.model');
-const ErrorResponse = require('../../utils/errorResponse');
+const ErrorResponse = require('../utils/errorResponse');
 
 // ─── ID Generation ────────────────────────────────────────────────────────────
 
