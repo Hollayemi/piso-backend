@@ -101,6 +101,9 @@ exports.submitApplication = asyncHandler(async (req, res, next) => {
         }
     }
 
+
+
+
     const applicationRef = await (await this.generateApplicationRef(req.body?.classPreferences?.classInterestedIn)).applicationRef
     console.log({ applicationRef })
     // Create admission application
