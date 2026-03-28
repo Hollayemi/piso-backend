@@ -95,7 +95,7 @@ const toDetailView = (doc, students = [], subjects = [], studentCount = 0) => ({
  */
 const getAllClasses = async ({ search, level, group }) => {
     // Avoid circular require — lazy-load Student to prevent import cycles
-    const Student = require('../../model/student');
+    const Student = require('../model/student.model');
     const Subject = require('../model/subject.model');
 
     const filter = {};
@@ -141,7 +141,7 @@ const getAllClasses = async ({ search, level, group }) => {
  * @param {string} id - classId e.g. "CLS-001"
  */
 const getClassById = async (id) => {
-    const Student = require('../../model/student');
+    const Student = require('../model/student.model');
     const Subject = require('../model/subject.model');
 
     const cls = await Class.findOne({ classId: id.toUpperCase() }).lean();
@@ -189,7 +189,7 @@ const createClass = async (body, createdBy) => {
     // Resolve class teacher snapshot if provided
     let classTeacher = {};
     if (body.classTeacherId) {
-        const Staff = require('../../model/staff');
+        const Staff = require('../model/staff.model');
         const staff = await Staff.findOne(
             { staffId: body.classTeacherId.toUpperCase() },
             { staffId: 1, surname: 1, firstName: 1, subjects: 1 }
@@ -271,7 +271,7 @@ const updateClass = async (id, body, updatedBy) => {
     // Resolve new class teacher snapshot if being updated
     if (body.classTeacherId !== undefined) {
         if (body.classTeacherId) {
-            const Staff = require('../../model/staff');
+            const Staff = require('../model/staff');
             const staff = await Staff.findOne(
                 { staffId: body.classTeacherId.toUpperCase() },
                 { staffId: 1, surname: 1, firstName: 1, subjects: 1 }
@@ -304,7 +304,7 @@ const updateClass = async (id, body, updatedBy) => {
         { new: true, runValidators: true }
     ).lean();
 
-    const Student = require('../../model/student');
+    const Student = require('../model/student.model');
     const count   = await Student.countDocuments({ class: updated.name, status: 'Active' });
 
     return { class: toListItem(updated, count) };
@@ -326,7 +326,7 @@ const deleteClass = async (id) => {
     }
 
     // Block if students are enrolled
-    const Student    = require('../../model/student');
+    const Student    = require('../model/student.model');
     const enrolled   = await Student.countDocuments({ class: cls.name, status: 'Active' });
 
     if (enrolled > 0) {

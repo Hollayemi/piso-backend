@@ -58,10 +58,11 @@ const toView = (doc) => ({
  * @param {string[]} teacherIds
  * @returns {Array} Array of { staffId, name, dept }
  */
+
 const resolveTeachers = async (teacherIds = []) => {
     if (!teacherIds.length) return [];
 
-    const Staff     = require('../../model/staff');
+    const Staff     = require('../model/staff.model');
     const upperIds  = teacherIds.map((id) => id.toUpperCase());
     const staffDocs = await Staff.find(
         { staffId: { $in: upperIds } },

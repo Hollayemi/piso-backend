@@ -1,139 +1,157 @@
 // server.js
-const express = require('express');
-const helmet = require('helmet');
-const cors = require('cors');
+const express      = require('express');
+const helmet       = require('helmet');
+const cors         = require('cors');
 const mongoSanitize = require('express-mongo-sanitize');
-const rateLimit = require('express-rate-limit');
-const hpp = require('hpp');
-const dotenv = require('dotenv');
-const morgan = require('morgan');
-const fileUpload = require('express-fileupload');
-const path = require('path');
+const rateLimit    = require('express-rate-limit');
+const hpp          = require('hpp');
+const dotenv       = require('dotenv');
+const morgan       = require('morgan');
+const fileUpload   = require('express-fileupload');
+const path         = require('path');
 
-// Load env vars
 dotenv.config();
 
+const errorHandler  = require('./middleware/errorHandler');
+const connectDB     = require('./config/database');
 
-const errorHandler = require('./middleware/errorHandler');
-const connectDB = require('./config/database');
-
-// Initialize app
 const app = express();
 
-// Connect to database
 connectDB();
 
-// Security Middleware
-app.use(helmet()); // Set security headers
-app.use(mongoSanitize()); // Prevent NoSQL injection
-app.use(hpp()); // Prevent HTTP parameter pollution
+// ─── Security Middleware ──────────────────────────────────────────────────────
 
-// CORS configuration
+app.use(helmet());
+app.use(mongoSanitize());
+app.use(hpp());
+
+// ─── CORS ─────────────────────────────────────────────────────────────────────
+
 const corsOptions = {
-    origin: process.env.ALLOWED_ORIGINS?.split(',').push("https://piso-demo.vercel.app/") || ['http://localhost:3000', 'https://piso-demo.vercel.app/'],
-    credentials: true,
-    optionsSuccessStatus: 200
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || [
+        'http://localhost:3000',
+        'https://piso-demo.vercel.app',
+    ],
+    credentials:         true,
+    optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
 
-// Rate limiting - prevent brute force attacks
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    message: 'Too many requests from this IP, please try again later.'
-});
-app.use('/api/', limiter);
+// ─── Rate Limiting ────────────────────────────────────────────────────────────
 
-// Stricter rate limit for admission submissions
+const globalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max:      100,
+    message:  'Too many requests from this IP, please try again later.',
+});
+
 const submissionLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 5, // limit each IP to 5 submissions per hour
-    message: 'Too many admission applications submitted. Please try again later.'
+    max:      5,
+    message:  'Too many admission applications submitted. Please try again later.',
 });
 
-// Body parser
+app.use('/api/', globalLimiter);
+
+// ─── Body Parsers ─────────────────────────────────────────────────────────────
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// File upload middleware
-app.use(fileUpload({
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max file size
-    abortOnLimit: true,
-    createParentPath: true,
-    useTempFiles: true,
-    tempFileDir: '/tmp/',
-    preserveExtension: true,
-    safeFileNames: true
-}));
+// ─── File Upload ──────────────────────────────────────────────────────────────
 
-// Logging
+app.use(
+    fileUpload({
+        limits:           { fileSize: 5 * 1024 * 1024 },
+        abortOnLimit:     true,
+        createParentPath: true,
+        useTempFiles:     true,
+        tempFileDir:      '/tmp/',
+        preserveExtension: true,
+        safeFileNames:    true,
+    })
+);
+
+// ─── Logging ──────────────────────────────────────────────────────────────────
+
 if (process.env.NODE_ENV === 'development') {
     app.use(morgan('dev'));
 }
 
-// Static folder for uploaded documents
+// ─── Static Files ─────────────────────────────────────────────────────────────
+
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Health check endpoint
+// ─── Health Check ─────────────────────────────────────────────────────────────
+
 app.get('/api/health', (req, res) => {
     res.status(200).json({
-        success: true,
-        message: 'API is running',
-        timestamp: new Date().toISOString()
+        success:   true,
+        message:   'API is running',
+        timestamp: new Date().toISOString(),
     });
 });
 
+// ─── Route Imports ────────────────────────────────────────────────────────────
 
-// Import routes
-const admissionRoutes = require('./routes/students');
-const authRoutes     = require('./routes/authRoutes');
-const settingsRoutes = require('./routes/settingsRoutes');
+const authRoutes      = require('./routes/authRoutes');
+const admissionRoutes = require('./routes/admissionRoutes');
 const studentRoutes   = require('./routes/studentRoutes');
 const staffRoutes     = require('./routes/staffRoutes');
 const academicsRoutes = require('./routes/academicsRoutes');
 const financeRoutes   = require('./routes/financeRoutes');
 const inventoryRoutes = require('./routes/inventoryRoutes');
 const transportRoutes = require('./routes/transportRoutes');
+const settingsRoutes  = require('./routes/settingsRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const { seedStaff } = require('./scripts/seedStaffs');
 
-// Mount routes
-app.use('/api/v1/admissions', submissionLimiter, admissionRoutes);
-app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/settings', settingsRoutes);
-app.use('/api/v1/students',  studentRoutes);
-app.use('/api/v1/staff',     staffRoutes);
-app.use('/api/v1/academics', academicsRoutes);
-app.use('/api/v1/finance',   financeRoutes);
-app.use('/api/v1/inventory', inventoryRoutes);
-app.use('/api/v1/transport', transportRoutes);
+// ─── Route Mounts ─────────────────────────────────────────────────────────────
 
+app.use('/api/v1/auth',       authRoutes);
+app.use('/api/v1/admissions', submissionLimiter, admissionRoutes); // public POST + protected routes
+app.use('/api/v1/students',   studentRoutes);
+app.use('/api/v1/staff',      staffRoutes);
+app.use('/api/v1/academics',  academicsRoutes);
+app.use('/api/v1/finance',    financeRoutes);
+app.use('/api/v1/inventory',  inventoryRoutes);
+app.use('/api/v1/transport',  transportRoutes);
+app.use('/api/v1/settings',   settingsRoutes);
+app.use('/api/v1/dashboard',  dashboardRoutes);
 
-// 404 handler
+// ─── 404 Handler ──────────────────────────────────────────────────────────────
+
 app.use((req, res) => {
     res.status(404).json({
-        success: false,
-        message: 'Route not found'
+        type:    'error',
+        message: `Route '${req.originalUrl}' not found`,
     });
 });
 
-// Error handler (must be last)
+// ─── Global Error Handler ─────────────────────────────────────────────────────
+
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5001;
+// ─── Start ────────────────────────────────────────────────────────────────────
 
+const PORT   = process.env.PORT || 5001;
 const server = app.listen(PORT, () => {
-    console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+    console.log(
+        `[${new Date().toISOString()}] Server running in ${process.env.NODE_ENV} mode on port ${PORT}`
+    );
 });
 
-// Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
-    console.error(`Error: ${err.message}`);
+    console.error(`Unhandled Rejection: ${err.message}`);
     server.close(() => process.exit(1));
 });
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
-    console.error(`Error: ${err.message}`);
+    console.error(`Uncaught Exception: ${err.message}`);
     process.exit(1);
 });
 
 module.exports = app;
+
+
+// seedStaff()

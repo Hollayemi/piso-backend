@@ -224,7 +224,7 @@ const saveTimetableCell = async (className, body, userId) => {
     }
 
     // Resolve teacher snapshot
-    const Staff = require('../../model/staff');
+    const Staff = require('../model/staff.model');
     const staff = await Staff.findOne(
         { staffId: teacherId.toUpperCase() },
         { staffId: 1, surname: 1, firstName: 1 }

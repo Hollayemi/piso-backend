@@ -253,7 +253,7 @@ const enrollStudent = async (body, enrolledBy) => {
     const resolvedTerm = term || currentTerm();
 
     // Verify student exists + pull snapshot fields
-    const Student = require('../../model/student');
+    const Student = require('../model/student.model');
     const student = await Student.findOne(
         { studentId: studentId.toUpperCase() },
         { studentId: 1, surname: 1, firstName: 1, class: 1, gender: 1, father: 1, mother: 1 }

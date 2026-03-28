@@ -76,9 +76,10 @@ const toProfileView = (doc) => ({
  */
 const login = async (email, password) => {
     // Explicitly select password (select: false in schema)
-    const staff = await Staff.findOne({ email: email.toLowerCase() })
-        .select('+password mustResetPassword')
-        .lean();
+const staff = await Staff.findOne({ email: email.toLowerCase() })
+    .select('+password email staffType surname firstName middleName status mustResetPassword staffId _id');
+
+        console.log(staff)
 
     if (!staff) {
         throw new ErrorResponse('Invalid email or password', 401, [
@@ -109,7 +110,7 @@ const login = async (email, password) => {
     // Build the role for the JWT — the Staff model stores role as staffType.
     // Map privileged staffTypes to system roles; everyone else is 'teacher'.
     const role = resolveRole(staff.staffType);
-
+    
     const token = signToken({
         id:             staff.staffId,
         role,

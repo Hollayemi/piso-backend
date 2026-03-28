@@ -118,7 +118,7 @@ router
 
 router
     .route('/timetable/:className/cell')
-    .put(authorize(...CRUD_ROLES), saveTimetableCell)
+    .put(saveTimetableCell)
     .delete(authorize(...CRUD_ROLES), clearTimetableCell);
 
 router
