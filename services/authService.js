@@ -139,7 +139,7 @@ const staff = await Staff.findOne({ email: email.toLowerCase() })
 const resolveRole = (staffType) => {
     const roleMap = {
         super_admin:           'super_admin',
-        principal:             'principal',
+        principal:             'super_admin',
         vice_principal_academic: 'principal',
         vice_principal_admin:    'principal',
         bursar:                'accountant',

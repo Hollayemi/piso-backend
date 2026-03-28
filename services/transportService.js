@@ -246,8 +246,6 @@ const getAllEnrollments = async ({ page, limit, search, routeId, payStatus }) =>
     };
 };
 
-// ─── 4.6  Enroll Student for Bus ──────────────────────────────────────────────
-
 const enrollStudent = async (body, enrolledBy) => {
     const { studentId, routeId, stop, term } = body;
     const resolvedTerm = term || currentTerm();
