@@ -63,7 +63,7 @@ const AdmissionSchema = new mongoose.Schema({
     schoolingOption: {
         type: String,
         required: [true, 'Schooling option is required'],
-        enum: ['day', 'boarding']
+        // enum: ['day', 'boarding']
     },
 
     // Father's Details

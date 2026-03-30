@@ -19,11 +19,6 @@ const parentSchema = Joi.object({
     email:         Joi.string().email().lowercase().trim().required().label('Email'),
 });
 
-const schoolAttendedSchema = Joi.object({
-    name:      Joi.string().trim().allow('').optional(),
-    startDate: Joi.date().iso().optional(),
-    endDate:   Joi.date().iso().optional(),
-});
 
 const vaccinationSchema = Joi.object({
     polio:         Joi.boolean().optional(),
@@ -61,17 +56,17 @@ const submitApplicationSchema = Joi.object({
     firstName:       Joi.string().trim().max(50).required().label('First Name'),
     middleName:      Joi.string().trim().max(50).allow('').optional(),
     dateOfBirth:     Joi.date().iso().max('now').required().label('Date of Birth'),
-    gender:          Joi.string().valid('Male', 'Female').required().label('Gender'),
+    gender:          Joi.string().valid('male', 'female').required().label('Gender'),
     bloodGroup:      Joi.string().valid('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', '').optional(),
     genotype:        Joi.string().valid('AA', 'AS', 'SS', 'AC', 'SC', '').optional(),
     nationality:     Joi.string().trim().required().label('Nationality'),
     stateOfOrigin:   Joi.string().trim().required().label('State of Origin'),
     localGovernment: Joi.string().trim().required().label('Local Government'),
-    schoolingOption: Joi.string().valid('Day', 'Boarding').required().label('Schooling Option'),
+    schoolingOption: Joi.string().valid('day', 'boarding').required().label('Schooling Option'),
     classPreferences: classPreferencesSchema.optional(),
     father:          parentSchema.required().label('Father'),
     mother:          parentSchema.required().label('Mother'),
-    schools:         Joi.array().items(schoolAttendedSchema).optional(),
+    schools:         Joi.object().optional(),
     health:          healthSchema.optional(),
     contact:         contactSchema.required(),
 });

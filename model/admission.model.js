@@ -31,7 +31,7 @@ const SCREENING_STATUSES = ['Pending', 'Verified', 'Rejected'];
 
 const ACCEPTANCE_STATUSES = ['Not Sent', 'Pending', 'Accepted', 'Declined'];
 
-const SCHOOLING_OPTIONS = ['Day', 'Boarding'];
+const SCHOOLING_OPTIONS = ['day', 'boarding'];
 
 // ─── Sub-schema: parent / guardian ───────────────────────────────────────────
 
@@ -203,7 +203,7 @@ const AdmissionSchema = new mongoose.Schema(
         gender: {
             type:     String,
             required: [true, 'Gender is required'],
-            enum:     ['Male', 'Female'],
+            enum:     ['male', 'female'],
         },
 
         bloodGroup: {

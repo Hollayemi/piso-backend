@@ -105,6 +105,7 @@ const transportRoutes = require('./routes/transportRoutes');
 const settingsRoutes  = require('./routes/settingsRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const { seedStaff } = require('./scripts/seedStaffs');
+const parentFinanceRoutes = require('./routes/parentFinanceRoutes');
 
 // ─── Route Mounts ─────────────────────────────────────────────────────────────
 
@@ -118,6 +119,7 @@ app.use('/api/v1/inventory',  inventoryRoutes);
 app.use('/api/v1/transport',  transportRoutes);
 app.use('/api/v1/settings',   settingsRoutes);
 app.use('/api/v1/dashboard',  dashboardRoutes);
+app.use('/api/v1', parentFinanceRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 
