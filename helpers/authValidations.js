@@ -28,7 +28,10 @@ const loginSchema = Joi.object({
         'string.email':  'Please provide a valid email address',
         'any.required':  'Email is required',
     }),
-
+    login_type: Joi.string().valid('admin', 'parent').required().messages({
+        'any.only':     'Login type must be either "admin" or "admission"',
+        'any.required': 'Login type is required',
+    }),
     password: Joi.string().min(1).required().messages({
         'any.required': 'Password is required',
     }),

@@ -1,24 +1,5 @@
-/**
- * admission.model.js
- *
- * Represents a single admission application submitted by a parent/guardian.
- *
- * Three embedded sub-documents track the lifecycle:
- *   application  → initial submission data
- *   screening    → document verification + officer decision (1.6 – 1.7)
- *   offer        → letter dispatch + acceptance tracking    (1.8 – 1.10)
- *
- * ID format: APP-YYYY-NNNN  e.g. APP-2025-0001
- *
- * Status flow:
- *   Pending  →  Under Review  →  Approved for Screening  →  (Rejected at any point)
- *   Screening: Pending → Verified | Rejected
- *   Offer:     Not Sent → Pending → Accepted | Declined
- */
-
 const mongoose = require('mongoose');
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 
 const APPLICATION_STATUSES = [
     'Pending',
@@ -27,28 +8,11 @@ const APPLICATION_STATUSES = [
     'Rejected',
 ];
 
-const SCREENING_STATUSES = ['Pending', 'Verified', 'Rejected'];
+const SCREENING_STATUSES   = ['Pending', 'Verified', 'Rejected'];
+const ACCEPTANCE_STATUSES  = ['Not Sent', 'Pending', 'Accepted', 'Declined'];
+const SCHOOLING_OPTIONS    = ['day', 'boarding'];
 
-const ACCEPTANCE_STATUSES = ['Not Sent', 'Pending', 'Accepted', 'Declined'];
 
-const SCHOOLING_OPTIONS = ['day', 'boarding'];
-
-// ─── Sub-schema: parent / guardian ───────────────────────────────────────────
-
-const ParentSchema = new mongoose.Schema(
-    {
-        name:          { type: String, required: true, trim: true },
-        occupation:    { type: String, required: true, trim: true },
-        officeAddress: { type: String, required: true, trim: true },
-        homeAddress:   { type: String, required: true, trim: true },
-        homePhone:     { type: String, required: true, trim: true },
-        whatsApp:      { type: String, required: true, trim: true },
-        email:         { type: String, required: true, lowercase: true, trim: true },
-    },
-    { _id: false }
-);
-
-// ─── Sub-schema: previous school ─────────────────────────────────────────────
 
 const SchoolAttendedSchema = new mongoose.Schema(
     {
@@ -59,7 +23,6 @@ const SchoolAttendedSchema = new mongoose.Schema(
     { _id: false }
 );
 
-// ─── Sub-schema: health & vaccinations ───────────────────────────────────────
 
 const VaccinationSchema = new mongoose.Schema(
     {
@@ -85,7 +48,16 @@ const HealthSchema = new mongoose.Schema(
     { _id: false }
 );
 
-// ─── Sub-schema: uploaded document flags ─────────────────────────────────────
+
+const DocFileSchema = new mongoose.Schema(
+    {
+        filename:   { type: String },
+        path:       { type: String },
+        uploadedAt: { type: Date },
+    },
+    { _id: false }
+);
+
 
 const DocumentFlagsSchema = new mongoose.Schema(
     {
@@ -98,74 +70,40 @@ const DocumentFlagsSchema = new mongoose.Schema(
     { _id: false }
 );
 
-// ─── Sub-schema: uploaded document files ─────────────────────────────────────
-
-const DocFileSchema = new mongoose.Schema(
-    {
-        filename:   { type: String },
-        path:       { type: String },
-        uploadedAt: { type: Date },
-    },
-    { _id: false }
-);
-
-// ─── Sub-schema: screening record ────────────────────────────────────────────
 
 const ScreeningSchema = new mongoose.Schema(
     {
-        screeningStatus: {
-            type:    String,
-            enum:    SCREENING_STATUSES,
-            default: 'Pending',
-        },
+        screeningStatus: { type: String, enum: SCREENING_STATUSES, default: 'Pending' },
         assignedOfficer: { type: String, trim: true, default: '' },
         notes:           { type: String, trim: true, default: '' },
-        docs: {
-            type:    DocumentFlagsSchema,
-            default: () => ({}),
-        },
-        updatedAt: { type: Date, default: null },
+        docs:            { type: DocumentFlagsSchema, default: () => ({}) },
+        updatedAt:       { type: Date, default: null },
     },
     { _id: false }
 );
 
-// ─── Sub-schema: offer record ─────────────────────────────────────────────────
 
 const OfferSchema = new mongoose.Schema(
     {
-        offerId: {
-            type:  String,
-            trim:  true,
-            default: '',
-            // Format: OFR-YYYY-NNNN
-        },
+        offerId:            { type: String, trim: true, default: '' },
         offerSent:          { type: Boolean, default: false },
-        offerDate:          { type: Date,    default: null  },
-        acceptanceDeadline: { type: Date,    default: null  },
+        offerDate:          { type: Date,    default: null },
+        acceptanceDeadline: { type: Date,    default: null },
         emailSent:          { type: Boolean, default: false },
         pdfGenerated:       { type: Boolean, default: false },
-        acceptanceStatus: {
-            type:    String,
-            enum:    ACCEPTANCE_STATUSES,
-            default: 'Not Sent',
-        },
-        sentAt:    { type: Date, default: null },
-        updatedAt: { type: Date, default: null },
+        acceptanceStatus:   { type: String, enum: ACCEPTANCE_STATUSES, default: 'Not Sent' },
+        sentAt:             { type: Date, default: null },
+        updatedAt:          { type: Date, default: null },
     },
     { _id: false }
 );
-
-// ─── Main Admission Schema ────────────────────────────────────────────────────
-
 const AdmissionSchema = new mongoose.Schema(
     {
-        // ── System / Identity ──────────────────────────────────────────────
         applicationId: {
             type:     String,
             unique:   true,
             required: true,
             trim:     true,
-            // Format: APP-YYYY-NNNN
         },
 
         serialNumber: {
@@ -173,7 +111,6 @@ const AdmissionSchema = new mongoose.Schema(
             required: true,
         },
 
-        // ── Personal Information ───────────────────────────────────────────
         surname: {
             type:      String,
             required:  [true, 'Surname is required'],
@@ -195,6 +132,12 @@ const AdmissionSchema = new mongoose.Schema(
             default:   '',
         },
 
+        parentId: {
+            type: mongoose.Types.ObjectId,
+            ref: "Parent",
+            required: true,
+        },
+
         dateOfBirth: {
             type:     Date,
             required: [true, 'Date of birth is required'],
@@ -207,34 +150,20 @@ const AdmissionSchema = new mongoose.Schema(
         },
 
         bloodGroup: {
-            type: String,
-            enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', ''],
+            type:    String,
+            enum:    ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', ''],
             default: '',
         },
 
         genotype: {
-            type: String,
-            enum: ['AA', 'AS', 'SS', 'AC', 'SC', ''],
+            type:    String,
+            enum:    ['AA', 'AS', 'SS', 'AC', 'SC', ''],
             default: '',
         },
 
-        nationality: {
-            type:     String,
-            required: [true, 'Nationality is required'],
-            trim:     true,
-        },
-
-        stateOfOrigin: {
-            type:     String,
-            required: [true, 'State of origin is required'],
-            trim:     true,
-        },
-
-        localGovernment: {
-            type:     String,
-            required: [true, 'Local government is required'],
-            trim:     true,
-        },
+        nationality:     { type: String, required: [true, 'Nationality is required'], trim: true },
+        stateOfOrigin:   { type: String, required: [true, 'State of origin is required'], trim: true },
+        localGovernment: { type: String, required: [true, 'Local government is required'], trim: true },
 
         schoolingOption: {
             type:     String,
@@ -242,43 +171,28 @@ const AdmissionSchema = new mongoose.Schema(
             enum:     SCHOOLING_OPTIONS,
         },
 
-        // ── Class Preferences ──────────────────────────────────────────────
         classPreferences: {
             presentClass:      { type: String, trim: true, default: '' },
             classInterestedIn: { type: String, trim: true, default: '' },
         },
 
-        // ── Parents / Guardian ─────────────────────────────────────────────
-        father: { type: ParentSchema, required: true },
-        mother: { type: ParentSchema, required: true },
+        correspondenceEmail: {
+            type:      String,
+            required:  [true, 'Correspondence email is required'],
+            lowercase: true,
+            trim:      true,
+        },
 
-        // ── Schools Attended ───────────────────────────────────────────────
+        howDidYouKnow: { type: String, trim: true, default: '' },
         schools: { type: [SchoolAttendedSchema], default: [] },
-
-        // ── Health ─────────────────────────────────────────────────────────
         health: { type: HealthSchema, default: () => ({}) },
-
-        // ── Contact ────────────────────────────────────────────────────────
-        contact: {
-            correspondenceEmail: {
-                type:      String,
-                required:  [true, 'Correspondence email is required'],
-                lowercase: true,
-                trim:      true,
-            },
-            howDidYouKnow: { type: String, trim: true, default: '' },
-        },
-
-        // ── Uploaded Document Files ────────────────────────────────────────
         documents: {
-            birthCertificate:       { type: DocFileSchema },
-            formerSchoolReport:     { type: DocFileSchema },
-            proofOfPayment:         { type: DocFileSchema },
+            birthCertificate:        { type: DocFileSchema },
+            formerSchoolReport:      { type: DocFileSchema },
+            proofOfPayment:          { type: DocFileSchema },
             immunizationCertificate: { type: DocFileSchema },
-            medicalReport:          { type: DocFileSchema },
+            medicalReport:           { type: DocFileSchema },
         },
-
-        // ── Application Status ─────────────────────────────────────────────
         status: {
             type:    String,
             enum:    APPLICATION_STATUSES,
@@ -287,24 +201,12 @@ const AdmissionSchema = new mongoose.Schema(
 
         reviewedBy:  { type: String, trim: true, default: '' },
         adminNotes:  { type: String, trim: true, default: '' },
-
-        // ── Screening ──────────────────────────────────────────────────────
-        screening: {
-            type:    ScreeningSchema,
-            default: () => ({}),
-        },
-
-        // ── Offer ──────────────────────────────────────────────────────────
-        offer: {
-            type:    OfferSchema,
-            default: () => ({}),
-        },
-
-        // ── Submission Metadata ────────────────────────────────────────────
+        screening: { type: ScreeningSchema, default: () => ({}) },
+        offer: { type: OfferSchema, default: () => ({}) },
+        enrolledStudentId: { type: String, trim: true, default: null },
+        enrolledParentId:  { type: String, trim: true, default: null },
         submittedFrom: { type: String, default: '' },
         dateApplied:   { type: Date, default: Date.now },
-
-        // ── Audit ──────────────────────────────────────────────────────────
         createdBy:     { type: String, default: '' },
         lastUpdatedBy: { type: String, default: '' },
     },
@@ -315,31 +217,23 @@ const AdmissionSchema = new mongoose.Schema(
     }
 );
 
-// ─── Virtuals ─────────────────────────────────────────────────────────────────
-
-/** Convenience: derived class the applicant is applying to */
 AdmissionSchema.virtual('appliedClass').get(function () {
     return this.classPreferences?.classInterestedIn || '';
 });
 
-/** True when at least one document file has been uploaded */
 AdmissionSchema.virtual('docsSubmitted').get(function () {
     const docs = this.documents || {};
     return Object.values(docs).some((d) => d && d.filename);
 });
 
-// ─── Indexes ──────────────────────────────────────────────────────────────────
-
 AdmissionSchema.index({ applicationId: 1 });
 AdmissionSchema.index({ status: 1 });
 AdmissionSchema.index({ 'screening.screeningStatus': 1 });
 AdmissionSchema.index({ 'offer.acceptanceStatus': 1 });
-AdmissionSchema.index({ 'contact.correspondenceEmail': 1 });
+AdmissionSchema.index({ correspondenceEmail: 1 });
 AdmissionSchema.index({ surname: 1, firstName: 1 });
 AdmissionSchema.index({ dateApplied: -1 });
 AdmissionSchema.index({ createdAt: -1 });
-
-// ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = mongoose.model('Admission', AdmissionSchema);
 module.exports.APPLICATION_STATUSES = APPLICATION_STATUSES;

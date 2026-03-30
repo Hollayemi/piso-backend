@@ -1,32 +1,11 @@
-/**
- * services/parentAuthService.js
- *
- * Authentication logic specific to parent accounts.
- * Parents log in via the same POST /auth/login endpoint.
- * This service is called by authService.login() when the user is
- * identified as a parent (no Staff record found but Parent record found).
- *
- * The JWT payload for parents:
- *   { id: parentId, role: 'parent', email, name, sessionVersion }
- *
- * The protect middleware handles parents the same as staff — it verifies
- * the JWT — but the parentAuth middleware then loads the Parent document
- * instead of the Staff document.
- */
-
 const jwt    = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
-const Parent       = require('../model/parent.model');
-const Settings     = require('../model/settings.model');
+const Parent        = require('../model/parent.model');
+const Settings      = require('../model/settings.model');
 const ErrorResponse = require('../utils/errorResponse');
 
-// ─── ID Generation ────────────────────────────────────────────────────────────
-
-/**
- * Generates the next sequential parent ID.
- * Format: PAR-YYYY-NNNN  e.g. PAR-2025-0001
- */
 const generateParentId = async () => {
     const year   = new Date().getFullYear();
     const prefix = `PAR-${year}-`;
@@ -39,49 +18,50 @@ const generateParentId = async () => {
     const nextSerial   = latest ? latest.serialNumber + 1 : 1;
     const paddedSerial = String(nextSerial).padStart(4, '0');
 
-    return {
-        parentId:     `${prefix}${paddedSerial}`,
-        serialNumber: nextSerial,
-    };
+    return { parentId: `${prefix}${paddedSerial}`, serialNumber: nextSerial };
 };
-
-// ─── Token factory ────────────────────────────────────────────────────────────
 
 const signToken = (payload) =>
     jwt.sign(payload, process.env.JWT_SECRET, {
         expiresIn: process.env.JWT_EXPIRE || '7d',
     });
 
-// ─── Profile shape ────────────────────────────────────────────────────────────
-
 const toProfileView = (doc) => ({
-    id:               doc.parentId,
-    name:             doc.name,
-    email:            doc.email,
-    phone:            doc.phone             || '',
-    whatsApp:         doc.whatsApp          || '',
-    occupation:       doc.occupation        || '',
-    relation:         doc.relation          || 'guardian',
-    homeAddress:      doc.homeAddress       || '',
-    linkedStudentIds: doc.linkedStudentIds  || [],
-    lastLogin:        doc.lastLogin,
-    mustResetPassword: doc.mustResetPassword || false,
+    id:                  doc.parentId,
+    familyName:          doc.familyName,
+    email:               doc.email,
+    correspondenceEmail: doc.correspondenceEmail || '',
+    father: {
+        name:          doc.father?.name          || '',
+        email:         doc.father?.email         || '',
+        phone:         doc.father?.homePhone      || '',
+        whatsApp:      doc.father?.whatsApp       || '',
+        occupation:    doc.father?.occupation     || '',
+        officeAddress: doc.father?.officeAddress  || '',
+        homeAddress:   doc.father?.homeAddress    || '',
+    },
+    mother: {
+        name:          doc.mother?.name          || '',
+        email:         doc.mother?.email         || '',
+        phone:         doc.mother?.homePhone      || '',
+        whatsApp:      doc.mother?.whatsApp       || '',
+        occupation:    doc.mother?.occupation     || '',
+        officeAddress: doc.mother?.officeAddress  || '',
+        homeAddress:   doc.mother?.homeAddress    || '',
+    },
+    lastLogin:         doc.lastLogin,
+    mustResetPassword: doc.mustResetPassword ?? false,
 });
 
-// ─── login ────────────────────────────────────────────────────────────────────
-
 /**
- * Authenticates a parent by email + password.
- * Returns the parent profile and a signed JWT.
+ * Authenticates a parent using the father's email address.
  *
- * Called by authService.login() when no Staff record is found for the email.
- *
- * @param {string} email
+ * @param {string} email     — father's email (Parent.email)
  * @param {string} password
  */
 const login = async (email, password) => {
     const parent = await Parent.findOne({ email: email.toLowerCase() })
-        .select('+password name email relation parentId linkedStudentIds mustResetPassword lastLogin');
+        .select('+password familyName email father mother correspondenceEmail parentId mustResetPassword lastLogin');
 
     if (!parent) {
         throw new ErrorResponse('Invalid email or password', 401, [
@@ -103,20 +83,20 @@ const login = async (email, password) => {
         id:             parent.parentId,
         role:           'parent',
         email:          parent.email,
-        name:           parent.name,
+        name:           parent.familyName,
         sessionVersion,
     });
 
-    // Update lastLogin
     await Parent.findByIdAndUpdate(parent._id, { $set: { lastLogin: new Date() } });
 
     return { token, parent: toProfileView(parent) };
 };
 
-// ─── getProfile ───────────────────────────────────────────────────────────────
-
 const getProfile = async (parentId) => {
-    const parent = await Parent.findOne({ parentId: parentId.toUpperCase() }, { password: 0 }).lean();
+    const parent = await Parent.findOne(
+        { parentId: parentId.toUpperCase() },
+        { password: 0 }
+    ).lean();
 
     if (!parent) {
         throw new ErrorResponse('Parent account not found.', 404);
@@ -125,15 +105,12 @@ const getProfile = async (parentId) => {
     return { parent: toProfileView(parent) };
 };
 
-// ─── changePassword ───────────────────────────────────────────────────────────
 
 const changePassword = async (parentId, currentPassword, newPassword) => {
     const parent = await Parent.findOne({ parentId: parentId.toUpperCase() })
         .select('+password mustResetPassword');
 
-    if (!parent) {
-        throw new ErrorResponse('Parent account not found.', 404);
-    }
+    if (!parent) throw new ErrorResponse('Parent account not found.', 404);
 
     const isMatch = await bcrypt.compare(currentPassword, parent.password || '');
     if (!isMatch) {
@@ -144,7 +121,7 @@ const changePassword = async (parentId, currentPassword, newPassword) => {
 
     const isSame = await bcrypt.compare(newPassword, parent.password || '');
     if (isSame) {
-        throw new ErrorResponse('New password must be different from the current password.', 400, [
+        throw new ErrorResponse('New password must differ from the current password.', 400, [
             { code: 'SAME_PASSWORD' },
         ]);
     }
@@ -157,57 +134,79 @@ const changePassword = async (parentId, currentPassword, newPassword) => {
     return { message: 'Password changed successfully' };
 };
 
-// ─── createParentAccount (admin utility) ──────────────────────────────────────
-
 /**
- * Creates a parent account from a Student record's parent data.
- * Called by studentService when a student is registered and the
- * parent email does not already have an account.
- *
- * @param {object} parentData - { name, email, phone, whatsApp, relation }
- * @param {string} studentId  - The linked student ID
- * @param {string} createdBy  - Staff ID
+ * @param {object} fatherData   - { name, email, homePhone, whatsApp, occupation, officeAddress, homeAddress }
+ * @param {object} motherData   - same shape
+ * @param {string} correspondenceEmail
+ * @param {string} howDidYouKnow
+ * @param {string} createdBy    - Staff ID
+ * @returns {Promise<Parent>}   - The created or existing Parent document
  */
-const createParentAccount = async (parentData, studentId, createdBy) => {
-    // Skip if account already exists — just link the student
-    const existing = await Parent.findOne({ email: parentData.email.toLowerCase() });
 
-    if (existing) {
-        // Link the student if not already linked
-        if (!existing.linkedStudentIds.includes(studentId)) {
-            await Parent.findByIdAndUpdate(existing._id, {
-                $addToSet: { linkedStudentIds: studentId },
-            });
-        }
-        return existing;
-    }
+const createParentAccount = async (
+    fatherData,
+    motherData,
+    correspondenceEmail,
+    howDidYouKnow,
+    createdBy
+) => {
+    console.log({
+        fatherData,
+    motherData,
+    correspondenceEmail,
+    howDidYouKnow,
+    createdBy
+    })
+    const loginEmail = fatherData.email.toLowerCase();
+
+    // Idempotent — return existing account if the father email is already registered
+    const existing = await Parent.findOne({ email: loginEmail });
+    if (existing) return existing;
 
     const { parentId, serialNumber } = await generateParentId();
 
-    // Generate a temporary password — parent must reset on first login
-    const tempPassword   = require('crypto').randomBytes(6).toString('hex');
+    // Generate a temporary password — parent must change on first login
+    const tempPassword   = crypto.randomBytes(6).toString('hex');
     const salt           = await bcrypt.genSalt(12);
     const hashedPassword = await bcrypt.hash(tempPassword, salt);
 
     const parent = await Parent.create({
         parentId,
         serialNumber,
-        name:              parentData.name,
-        email:             parentData.email.toLowerCase(),
-        phone:             parentData.phone     || '',
-        whatsApp:          parentData.whatsApp  || '',
-        occupation:        parentData.occupation || '',
-        homeAddress:       parentData.homeAddress || '',
-        relation:          parentData.relation  || 'guardian',
-        linkedStudentIds:  [studentId],
-        password:          hashedPassword,
+        familyName: fatherData.name,
+        email:      loginEmail,
+        password:   hashedPassword,
         mustResetPassword: true,
+        father: {
+            name:          fatherData.name,
+            email:         fatherData.email,
+            homePhone:     fatherData.homePhone  || fatherData.phone || '',
+            whatsApp:      fatherData.whatsApp   || '',
+            occupation:    fatherData.occupation || '',
+            officeAddress: fatherData.officeAddress || '',
+            homeAddress:   fatherData.homeAddress   || '',
+        },
+        mother: {
+            name:          motherData.name,
+            email:         motherData.email,
+            homePhone:     motherData.homePhone  || motherData.phone || '',
+            whatsApp:      motherData.whatsApp   || '',
+            occupation:    motherData.occupation || '',
+            officeAddress: motherData.officeAddress || '',
+            homeAddress:   motherData.homeAddress   || '',
+        },
+        correspondenceEmail: correspondenceEmail || loginEmail,
+        howDidYouKnow:       howDidYouKnow       || '',
         createdBy,
     });
 
-    // NOTE: In production, send the tempPassword to the parent's email
-    // via an email service (nodemailer). Log it here for development.
-    console.log(`[ParentAuth] Created parent account ${parentId} for ${parentData.email} | temp: ${tempPassword}`);
+    // In production: send the tempPassword to the parent's email via nodemailer.
+    // For development: log to console only.
+    if (process.env.NODE_ENV === 'development') {
+        console.log(
+            `[ParentAuth] Created account ${parentId} | email: ${loginEmail} | temp password: ${tempPassword}`
+        );
+    }
 
     return parent;
 };

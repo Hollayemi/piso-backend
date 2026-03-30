@@ -22,19 +22,20 @@
  *   paths listed in RESET_EXEMPT_PATHS.
  */
 
-const jwt      = require('jsonwebtoken');
-const Staff    = require('../model/staff.model');
+const jwt = require('jsonwebtoken');
+const Staff = require('../model/staff.model');
 const Settings = require('../model/settings.model');
 const ErrorResponse = require('../utils/errorResponse');
+const Parent = require("../model/parent.model")
 
 // ─── Role constants — single source of truth across all route files ───────────
 
 const ROLES = Object.freeze({
     SUPER_ADMIN: 'super_admin',
-    ADMIN:       'admin',
-    PRINCIPAL:   'principal',
-    ACCOUNTANT:  'accountant',
-    TEACHER:     'teacher',
+    ADMIN: 'admin',
+    PRINCIPAL: 'principal',
+    ACCOUNTANT: 'accountant',
+    TEACHER: 'teacher',
 });
 
 // ─── Paths exempt from the mustResetPassword block ────────────────────────────
@@ -64,10 +65,10 @@ const protect = async (req, res, next) => {
         // Verify signature and expiry
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        console.log({decoded})
+        console.log({ decoded })
 
         // ── Session version check ──────────────────────────────────────────
-        const settings       = await Settings.getSingleton();
+        const settings = await Settings.getSingleton();
         const currentVersion = settings.security?.sessionVersion ?? 1;
 
         if ((decoded.sessionVersion ?? 1) < currentVersion) {
@@ -80,13 +81,36 @@ const protect = async (req, res, next) => {
         }
 
         // ── Load the staff record (without password) ───────────────────────
-        const staff = await Staff.findOne({ staffId: decoded.id });
 
-        if (!staff) {
+        let user = ""
+
+        if (decoded.role !== "parent") {
+            user = await Staff.findOne({ staffId: decoded.id });
+            req.user = {
+                id: user.staffId,
+                role: decoded.role,
+                email: user.email,
+                name: `${user.surname} ${user.firstName}`,
+                staffDoc: user,
+            };
+        } else {
+            user = await Parent.findOne({parentId: decoded.id});
+            req.user = {
+                id: user.parentId,
+                role: decoded.role,
+                email: user.email,
+                name: user.familyName,
+                staffDoc: user,          // full doc available if needed
+            };
+        }
+
+        console.log({ user })
+
+        if (!user) {
             return next(new ErrorResponse('User account not found', 401));
         }
 
-        if (staff.status === 'Inactive') {
+        if (user.status === 'Inactive') {
             return next(
                 new ErrorResponse(
                     'Your account has been deactivated. Please contact the administrator.',
@@ -100,7 +124,7 @@ const protect = async (req, res, next) => {
             req.path.includes(p)
         );
 
-        if (staff.mustResetPassword && !isExemptPath) {
+        if (user.mustResetPassword && !isExemptPath) {
             return next(
                 new ErrorResponse(
                     'You must change your password before continuing.',
@@ -110,17 +134,14 @@ const protect = async (req, res, next) => {
             );
         }
 
+        console.log({ user })
+
         // Attach a compact user object to the request
-        req.user = {
-            id:       staff.staffId,
-            role:     decoded.role,
-            email:    staff.email,
-            name:     `${staff.surname} ${staff.firstName}`,
-            staffDoc: staff,          // full doc available if needed
-        };
+        req.user = user
 
         next();
     } catch (err) {
+        console.error('Auth middleware error:', err);
         if (err.name === 'TokenExpiredError') {
             return next(new ErrorResponse('Session expired — please log in again', 401));
         }

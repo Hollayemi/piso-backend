@@ -1,26 +1,9 @@
-/**
- * controllers/authController.js
- *
- * HTTP request/response handling for the Auth module.
- *
- * Each handler:
- *   1. Validates input with Joi
- *   2. Delegates to authService
- *   3. Sends a standardised response via sendSuccess
- *
- * No business logic or DB access lives here.
- *
- * Routes:
- *   POST /api/v1/auth/login            → login
- *   POST /api/v1/auth/logout           → logout      (requires auth)
- *   GET  /api/v1/auth/me               → getProfile  (requires auth)
- *   PUT  /api/v1/auth/change-password  → changePassword (requires auth)
- */
 
-const asyncHandler   = require('../middleware/asyncHandler');
-const ErrorResponse  = require('../utils/errorResponse');
+const asyncHandler = require('../middleware/asyncHandler');
+const ErrorResponse = require('../utils/errorResponse');
 const { sendSuccess } = require('../utils/sendResponse');
-const authService    = require('../services/authService');
+const authService = require('../services/authService');
+const parentService = require('../services/parentAuthService');
 
 const {
     validate,
@@ -32,7 +15,7 @@ const {
 
 const extractJoiErrors = (joiError) =>
     joiError.details.map((d) => ({
-        field:   d.path.join('.'),
+        field: d.path.join('.'),
         message: d.message.replace(/['"]/g, ''),
     }));
 
@@ -51,7 +34,7 @@ exports.login = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse('Validation failed', 400, extractJoiErrors(error)));
     }
 
-    const result = await authService.login(value.email, value.password);
+    const result = await authService.login(value.email, value.password, value.login_type);
 
     sendSuccess(res, 200, 'Login successful', result);
 });
@@ -79,8 +62,16 @@ exports.logout = asyncHandler(async (req, res) => {
  * @route   GET /api/v1/auth/me
  * @access  Private — any authenticated role
  */
+
+
 exports.getProfile = asyncHandler(async (req, res) => {
-    const result = await authService.getProfile(req.user.id);
+    console.log("getProfile called for user:", req.user);
+    let result;
+    if (req.user.parentId) {
+        result = await parentService.getProfile(req.user.parentId);
+    } else {
+        result = await authService.getProfile(req.user.id);
+    }
     sendSuccess(res, 200, '', result);
 });
 

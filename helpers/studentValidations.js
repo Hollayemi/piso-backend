@@ -1,26 +1,17 @@
+/**
+ * helpers/studentValidations.js
+ *
+ * Joi validation schemas for the Student module.
+ *
+ * Parent/guardian information is no longer part of the student payload.
+ * When registering a student, the caller must supply `parentId` (an
+ * existing Parent document) OR the full parent details via the separate
+ * parent creation flow. The student service handles both paths.
+ */
+
 const Joi = require('joi');
 
-const nigerianPhone = (value, helpers) => {
-    const phoneRegex = /^(\+234|0)(70|80|81|90|91)\d{8}$/;
-    if (!phoneRegex.test(value)) {
-        return helpers.error('any.invalid');
-    }
-    return value;
-};
-
-const parentSchema = Joi.object({
-    name:          Joi.string().trim().min(2).max(100).required(),
-    occupation:    Joi.string().trim().min(2).max(100).required(),
-    officeAddress: Joi.string().trim().min(5).max(200).required(),
-    homeAddress:   Joi.string().trim().min(5).max(200).required(),
-    homePhone:     Joi.string().custom(nigerianPhone).required().messages({
-        'any.invalid': 'Invalid Nigerian phone number format',
-    }),
-    whatsApp: Joi.string().custom(nigerianPhone).required().messages({
-        'any.invalid': 'Invalid WhatsApp number format',
-    }),
-    email: Joi.string().email().lowercase().required(),
-});
+// ─── Sub-schemas ──────────────────────────────────────────────────────────────
 
 const schoolAttendedSchema = Joi.object({
     name:      Joi.string().trim().max(200).allow('').optional(),
@@ -49,21 +40,76 @@ const healthSchema = Joi.object({
 // ─── Create Student ───────────────────────────────────────────────────────────
 
 const createStudentSchema = Joi.object({
-    // Personal
-    surname:    Joi.string().trim().min(2).max(50).pattern(/^[a-zA-Z\s'-]+$/).required().messages({
-        'string.pattern.base': 'Surname must contain only letters, spaces, hyphens, and apostrophes',
-        'any.required':        'Surname is required',
-    }),
-    firstName:  Joi.string().trim().min(2).max(50).pattern(/^[a-zA-Z\s'-]+$/).required().messages({
-        'string.pattern.base': 'First name must contain only letters',
-        'any.required':        'First name is required',
-    }),
-    middleName: Joi.string().trim().max(50).pattern(/^[a-zA-Z\s'-]+$/).allow('').optional(),
+    // ── Parent link — one of these must be supplied ────────────────────────
+    /**
+     * Option A: link to an existing Parent document.
+     */
+    parentId: Joi.string().trim().optional(),
 
-    gender:      Joi.string().valid('Male', 'Female').required().messages({
+    /**
+     * Option B: provide parent details inline — the service will create
+     * a Parent record and derive the parentId automatically.
+     * Both father and mother are required when parentId is absent.
+     */
+    father: Joi.when('parentId', {
+        is:        Joi.exist(),
+        then:      Joi.object().optional(),
+        otherwise: Joi.object({
+            name:          Joi.string().trim().min(2).max(100).required(),
+            occupation:    Joi.string().trim().min(2).max(100).required(),
+            officeAddress: Joi.string().trim().min(5).max(200).required(),
+            homeAddress:   Joi.string().trim().min(5).max(200).required(),
+            homePhone:     Joi.string().trim().required(),
+            whatsApp:      Joi.string().trim().required(),
+            email:         Joi.string().email().lowercase().required(),
+        }).required().messages({ 'any.required': 'Father details are required when parentId is not provided' }),
+    }),
+
+    mother: Joi.when('parentId', {
+        is:        Joi.exist(),
+        then:      Joi.object().optional(),
+        otherwise: Joi.object({
+            name:          Joi.string().trim().min(2).max(100).required(),
+            occupation:    Joi.string().trim().min(2).max(100).required(),
+            officeAddress: Joi.string().trim().min(5).max(200).required(),
+            homeAddress:   Joi.string().trim().min(5).max(200).required(),
+            homePhone:     Joi.string().trim().required(),
+            whatsApp:      Joi.string().trim().required(),
+            email:         Joi.string().email().lowercase().required(),
+        }).required().messages({ 'any.required': 'Mother details are required when parentId is not provided' }),
+    }),
+
+    // Correspondence email captured here only when creating the parent inline
+    correspondenceEmail: Joi.string().email().lowercase().optional(),
+    howDidYouKnow:       Joi.string().trim().allow('').optional(),
+
+    // ── Personal ──────────────────────────────────────────────────────────
+    surname: Joi.string().trim().min(2).max(50)
+        .pattern(/^[a-zA-Z\s'-]+$/)
+        .required()
+        .messages({
+            'string.pattern.base': 'Surname must contain only letters, spaces, hyphens, and apostrophes',
+            'any.required':        'Surname is required',
+        }),
+
+    firstName: Joi.string().trim().min(2).max(50)
+        .pattern(/^[a-zA-Z\s'-]+$/)
+        .required()
+        .messages({
+            'string.pattern.base': 'First name must contain only letters',
+            'any.required':        'First name is required',
+        }),
+
+    middleName: Joi.string().trim().max(50)
+        .pattern(/^[a-zA-Z\s'-]+$/)
+        .allow('')
+        .optional(),
+
+    gender: Joi.string().valid('Male', 'Female').required().messages({
         'any.only':    'Gender must be Male or Female',
         'any.required': 'Gender is required',
     }),
+
     dateOfBirth: Joi.date().iso().max('now').min('1990-01-01').required().messages({
         'date.max':    'Date of birth must be in the past',
         'date.min':    'Invalid date of birth',
@@ -79,10 +125,12 @@ const createStudentSchema = Joi.object({
         .valid('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', '')
         .allow('')
         .optional(),
+
     genotype: Joi.string().valid('AA', 'AS', 'SS', 'AC', 'SC', '').allow('').optional(),
 
-    // Academic
-    class:          Joi.string().trim().required().messages({ 'any.required': 'Class is required' }),
+    // ── Academic ──────────────────────────────────────────────────────────
+    class: Joi.string().trim().required().messages({ 'any.required': 'Class is required' }),
+
     schoolingOption: Joi.string().valid('Day', 'Boarding').required().messages({
         'any.only':    'Schooling option must be Day or Boarding',
         'any.required': 'Schooling option is required',
@@ -95,20 +143,8 @@ const createStudentSchema = Joi.object({
 
     schools: Joi.array().items(schoolAttendedSchema).optional(),
 
-    // Parents
-    father: parentSchema.required(),
-    mother: parentSchema.required(),
-
-    // Contact
-    correspondenceEmail: Joi.string().email().lowercase().required().messages({
-        'any.required': 'Correspondence email is required',
-    }),
-    howDidYouKnow: Joi.string().trim().allow('').optional(),
-
-    // Health
+    // ── Health ────────────────────────────────────────────────────────────
     health: healthSchema.optional(),
-
-    // Photo is handled separately as a file upload
 });
 
 // ─── Update Student (all fields optional / partial) ───────────────────────────
@@ -117,8 +153,7 @@ const updateStudentSchema = createStudentSchema.fork(
     [
         'surname', 'firstName', 'gender', 'dateOfBirth',
         'nationality', 'stateOfOrigin', 'localGovernment',
-        'class', 'schoolingOption', 'correspondenceEmail',
-        'father', 'mother',
+        'class', 'schoolingOption',
     ],
     (field) => field.optional()
 );
@@ -151,13 +186,6 @@ const promoteStudentsSchema = Joi.object({
 
 // ─── Validation runner ────────────────────────────────────────────────────────
 
-/**
- * Validates data against a Joi schema.
- * Returns { error, value } — matches existing Joi pattern in the codebase.
- *
- * @param {object} schema  - Joi schema object
- * @param {object} data    - Raw request body
- */
 const validate = (schema, data) =>
     schema.validate(data, { abortEarly: false, stripUnknown: true });
 

@@ -47,8 +47,8 @@ const globalLimiter = rateLimit({
 
 const submissionLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max:      5,
-    message:  'Too many admission applications submitted. Please try again later.',
+    max:      10,
+    message:  'Too many request applications submitted. Please try again later.',
 });
 
 app.use('/api/', globalLimiter);

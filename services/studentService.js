@@ -1,22 +1,27 @@
-const path = require('path');
-const fs = require('fs').promises;
-const crypto = require('crypto');
+/**
+ * services/studentService.js
+ *
+ * All database interactions and business logic for the Student module.
+ *
+ * Key changes from the previous version:
+ *   - No father/mother/contact fields on Student.
+ *   - Student now holds only parentId (FK → Parent).
+ *   - createStudent() automatically creates a Parent account via
+ *     parentAuthService.createParentAccount() when father + mother details
+ *     are provided inline, or validates an existing parentId.
+ *   - All read methods populate the parent document on demand.
+ */
+
+const path   = require('path');
+const fs     = require('fs').promises;
 const Student = require('../model/student.model');
+const Parent  = require('../model/parent.model');
+const { createParentAccount } = require('./parentAuthService');
 const ErrorResponse = require('../utils/errorResponse');
 
 // ─── ID Generation ────────────────────────────────────────────────────────────
 
-/**
- * Finds the next available serial number for the given year and
- * returns a formatted student ID.
- *
- * Format: STU-YYYY-NNNN  (e.g. STU-2025-0047)
- *
- * @param {number} year  - Admission year (defaults to current year)
- * @returns {{ studentId: string, serialNumber: number }}
- */
 const generateStudentId = async (year = new Date().getFullYear()) => {
-    // Find the highest serial for this admission year
     const yearPrefix = `STU-${year}-`;
 
     const latest = await Student.findOne(
@@ -24,13 +29,10 @@ const generateStudentId = async (year = new Date().getFullYear()) => {
         { serialNumber: 1 }
     ).sort({ serialNumber: -1 });
 
-    const nextSerial = latest ? latest.serialNumber + 1 : 1;
-    const paddedSerial = String(nextSerial).padStart(4, '0');
+    const nextSerial    = latest ? latest.serialNumber + 1 : 1;
+    const paddedSerial  = String(nextSerial).padStart(4, '0');
 
-    return {
-        studentId: `${yearPrefix}${paddedSerial}`,
-        serialNumber: nextSerial,
-    };
+    return { studentId: `${yearPrefix}${paddedSerial}`, serialNumber: nextSerial };
 };
 
 // ─── Photo Upload ─────────────────────────────────────────────────────────────
@@ -40,155 +42,144 @@ const ALLOWED_IMAGE_TYPES = {
     'image/jpg':  'jpg',
     'image/png':  'png',
 };
-
 const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5 MB
 
-/**
- * Validates and saves a student photo to disk.
- * Returns the relative URL path for storage in the DB.
- *
- * @param {object} photoFile  - Express-fileupload file object
- * @param {string} studentId  - Used to name the file
- * @returns {string} photoUrl - e.g. /uploads/students/STU-2025-0001.jpg
- */
 const uploadStudentPhoto = async (photoFile, studentId) => {
     if (!ALLOWED_IMAGE_TYPES[photoFile.mimetype]) {
-        throw new ErrorResponse(
-            'Invalid photo format. Only JPG and PNG are accepted.',
-            400
-        );
+        throw new ErrorResponse('Invalid photo format. Only JPG and PNG are accepted.', 400);
     }
     if (photoFile.size > MAX_PHOTO_SIZE) {
-        throw new ErrorResponse('Photo file size must not exceed 5MB.', 400);
+        throw new ErrorResponse('Photo file size must not exceed 5 MB.', 400);
     }
 
     const uploadDir = path.join(__dirname, '../uploads/students');
     await fs.mkdir(uploadDir, { recursive: true });
 
-    const ext = ALLOWED_IMAGE_TYPES[photoFile.mimetype];
+    const ext      = ALLOWED_IMAGE_TYPES[photoFile.mimetype];
     const filename = `${studentId}.${ext}`;
     const filePath = path.join(uploadDir, filename);
 
     await photoFile.mv(filePath);
-
     return `/uploads/students/${filename}`;
 };
 
-/**
- * Deletes a student photo from disk (best-effort, won't throw on failure).
- *
- * @param {string} photoUrl  - The stored relative URL
- */
 const deleteStudentPhoto = async (photoUrl) => {
     if (!photoUrl) return;
     try {
-        const filePath = path.join(__dirname, '..', photoUrl);
-        await fs.unlink(filePath);
-    } catch {
-        // Silently swallow — file may have already been deleted
-    }
+        await fs.unlink(path.join(__dirname, '..', photoUrl));
+    } catch { /* silently ignore */ }
 };
 
 // ─── Shape Helpers ────────────────────────────────────────────────────────────
 
 /**
- * Returns the flat response shape for a student list item (1.1).
+ * List-item shape — lean parent embedded for convenience.
  */
-const toListItem = (doc) => ({
-    id:                 doc.studentId,
-    surname:            doc.surname,
-    firstName:          doc.firstName,
-    middleName:         doc.middleName || '',
-    gender:             doc.gender,
-    dateOfBirth:        doc.dateOfBirth,
-    class:              doc.class,
-    schoolingOption:    doc.schoolingOption,
-    status:             doc.status,
-    stateOfOrigin:      doc.stateOfOrigin,
-    bloodGroup:         doc.bloodGroup || '',
-    genotype:           doc.genotype || '',
-    fatherName:         doc.father?.name || '',
-    fatherPhone:        doc.father?.homePhone || '',
-    motherName:         doc.mother?.name || '',
-    motherPhone:        doc.mother?.homePhone || '',
-    correspondenceEmail: doc.contact?.correspondenceEmail || '',
-    admissionDate:      doc.admissionDate,
-    classTeacher:       doc.classTeacher || '',
-    fees:               doc.fees ?? {},
-    attendance:         doc.attendancePercentage ?? 0,
-    photo:              doc.photo ?? null,
-});
+const toListItem = (doc) => {
+    const p = doc.parent || {};
+    return {
+        id:              doc.studentId,
+        parentId:        doc.parentId,
+        surname:         doc.surname,
+        firstName:       doc.firstName,
+        middleName:      doc.middleName || '',
+        gender:          doc.gender,
+        dateOfBirth:     doc.dateOfBirth,
+        class:           doc.class,
+        schoolingOption: doc.schoolingOption,
+        status:          doc.status,
+        stateOfOrigin:   doc.stateOfOrigin,
+        bloodGroup:      doc.bloodGroup || '',
+        genotype:        doc.genotype   || '',
+        // Derived from parent
+        familyName:           p.familyName           || '',
+        fatherName:           p.father?.name          || '',
+        fatherPhone:          p.father?.homePhone      || '',
+        motherName:           p.mother?.name          || '',
+        motherPhone:          p.mother?.homePhone      || '',
+        correspondenceEmail:  p.correspondenceEmail   || '',
+        admissionDate:   doc.admissionDate,
+        classTeacher:    doc.classTeacher || '',
+        fees:            doc.fees ?? {},
+        attendance:      doc.attendancePercentage ?? 0,
+        photo:           doc.photo ?? null,
+    };
+};
 
 /**
- * Returns the full detailed response shape for a single student (1.2).
+ * Full detail shape including complete parent data.
  */
-const toDetailView = (doc) => ({
-    id:              doc.studentId,
-    surname:         doc.surname,
-    firstName:       doc.firstName,
-    middleName:      doc.middleName || '',
-    gender:          doc.gender,
-    dateOfBirth:     doc.dateOfBirth,
-    class:           doc.class,
-    schoolingOption: doc.schoolingOption,
-    status:          doc.status,
-    statusReason:    doc.statusReason || '',
-    stateOfOrigin:   doc.stateOfOrigin,
-    localGovernment: doc.localGovernment,
-    nationality:     doc.nationality,
-    religion:        doc.religion || '',
-    bloodGroup:      doc.bloodGroup || '',
-    genotype:        doc.genotype || '',
+const toDetailView = (doc) => {
+    const p = doc.parent || {};
+    return {
+        id:               doc.studentId,
+        parentId:         doc.parentId,
+        surname:          doc.surname,
+        firstName:        doc.firstName,
+        middleName:       doc.middleName || '',
+        gender:           doc.gender,
+        dateOfBirth:      doc.dateOfBirth,
+        class:            doc.class,
+        schoolingOption:  doc.schoolingOption,
+        status:           doc.status,
+        statusReason:     doc.statusReason || '',
+        stateOfOrigin:    doc.stateOfOrigin,
+        localGovernment:  doc.localGovernment,
+        nationality:      doc.nationality,
+        religion:         doc.religion || '',
+        bloodGroup:       doc.bloodGroup || '',
+        genotype:         doc.genotype   || '',
+        admissionDate:    doc.admissionDate,
+        classTeacher:     doc.classTeacher || '',
+        classPreferences: doc.classPreferences ?? {},
+        schools:          doc.schools ?? [],
+        health:           doc.health  ?? {},
+        fees:             doc.fees    ?? {},
+        attendance:       doc.attendancePercentage ?? 0,
+        photo:            doc.photo ?? null,
+        // Full parent block
+        parent: {
+            id:                  p.parentId             || '',
+            familyName:          p.familyName           || '',
+            correspondenceEmail: p.correspondenceEmail  || '',
+            father: {
+                name:          p.father?.name          || '',
+                email:         p.father?.email         || '',
+                phone:         p.father?.homePhone      || '',
+                whatsApp:      p.father?.whatsApp       || '',
+                occupation:    p.father?.occupation     || '',
+                officeAddress: p.father?.officeAddress  || '',
+                homeAddress:   p.father?.homeAddress    || '',
+            },
+            mother: {
+                name:          p.mother?.name          || '',
+                email:         p.mother?.email         || '',
+                phone:         p.mother?.homePhone      || '',
+                whatsApp:      p.mother?.whatsApp       || '',
+                occupation:    p.mother?.occupation     || '',
+                officeAddress: p.mother?.officeAddress  || '',
+                homeAddress:   p.mother?.homeAddress    || '',
+            },
+        },
+    };
+};
 
-    fatherName:          doc.father?.name,
-    fatherPhone:         doc.father?.homePhone,
-    fatherOccupation:    doc.father?.occupation,
-    fatherOfficeAddress: doc.father?.officeAddress,
-    fatherHomeAddress:   doc.father?.homeAddress,
-    fatherWhatsApp:      doc.father?.whatsApp,
-    fatherEmail:         doc.father?.email,
+// ─── 1.1  Get All Students ────────────────────────────────────────────────────
 
-    motherName:          doc.mother?.name,
-    motherPhone:         doc.mother?.homePhone,
-    motherOccupation:    doc.mother?.occupation,
-    motherOfficeAddress: doc.mother?.officeAddress,
-    motherHomeAddress:   doc.mother?.homeAddress,
-    motherWhatsApp:      doc.mother?.whatsApp,
-    motherEmail:         doc.mother?.email,
-
-    correspondenceEmail: doc.contact?.correspondenceEmail,
-    howDidYouKnow:       doc.contact?.howDidYouKnow || '',
-
-    admissionDate:    doc.admissionDate,
-    classTeacher:     doc.classTeacher || '',
-    classPreferences: doc.classPreferences ?? {},
-
-    fees:             doc.fees ?? {},
-    attendance:       doc.attendancePercentage ?? 0,
-    health:           doc.health ?? {},
-    schools:          doc.schools ?? [],
-    photo:            doc.photo ?? null,
-});
-
-// ─── Service Methods ──────────────────────────────────────────────────────────
-
-/**
- * 1.1 — Fetch a paginated, filtered list of students.
- *
- * @param {object} query  - Parsed query params from the controller
- */
 const getAllStudents = async ({ page, limit, search, class: cls, status, schoolingOption, gender }) => {
-    const pageNum  = Math.max(parseInt(page, 10)  || 1, 1);
+    const pageNum  = Math.max(parseInt(page,  10) || 1,  1);
     const limitNum = Math.min(parseInt(limit, 10) || 15, 100);
     const skip     = (pageNum - 1) * limitNum;
 
     const filter = {};
 
     if (search) {
+        // Search across both student fields and parent fields via a pipeline,
+        // but for simplicity keep the basic approach and include name searches.
         filter.$or = [
-            { surname:    { $regex: search, $options: 'i' } },
-            { firstName:  { $regex: search, $options: 'i' } },
-            { studentId:  { $regex: search, $options: 'i' } },
+            { surname:   { $regex: search, $options: 'i' } },
+            { firstName: { $regex: search, $options: 'i' } },
+            { studentId: { $regex: search, $options: 'i' } },
         ];
     }
     if (cls)            filter.class           = { $regex: cls, $options: 'i' };
@@ -201,6 +192,7 @@ const getAllStudents = async ({ page, limit, search, class: cls, status, schooli
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limitNum)
+            .populate('parent', '-password -__v')
             .lean({ virtuals: true }),
         Student.countDocuments(filter),
     ]);
@@ -216,34 +208,34 @@ const getAllStudents = async ({ page, limit, search, class: cls, status, schooli
     };
 };
 
-/**
- * 1.2 — Fetch a single student by studentId.
- *
- * @param {string} id  - e.g. "STU-2025-0001"
- */
+// ─── 1.2  Get Single Student ──────────────────────────────────────────────────
+
 const getStudentById = async (id) => {
-    const student = await Student.findOne({ studentId: id.toUpperCase() }).lean({ virtuals: true });
+    const student = await Student.findOne({ studentId: id.toUpperCase() })
+        .populate('parent', '-password -__v')
+        .lean({ virtuals: true });
 
     if (!student) {
-        throw new ErrorResponse(`Student with ID '${id}' not found`, 404);
+        throw new ErrorResponse(`Student with ID '${id}' not found.`, 404);
     }
 
     return { student: toDetailView(student) };
 };
 
+// ─── 1.3  Create Student ──────────────────────────────────────────────────────
+
 /**
- * 1.3 — Register a new student.
+ * Registers a new student.
  *
- * @param {object} body     - Validated request body
- * @param {object} files    - express-fileupload files object (may be undefined)
- * @param {string} createdBy - Staff ID of the authenticated user
- * @param {string} ip
+ * Two modes:
+ *   Mode A — parentId provided:  validate the parent exists, link it.
+ *   Mode B — father + mother provided: create/find the Parent account, link it.
  */
 const createStudent = async (body, files, createdBy, ip) => {
-    // Duplicate check — same full name + DOB
+    // ── Duplicate check ────────────────────────────────────────────────────
     const existing = await Student.findOne({
-        surname:   new RegExp(`^${body.surname}$`, 'i'),
-        firstName: new RegExp(`^${body.firstName}$`, 'i'),
+        surname:     new RegExp(`^${body.surname}$`, 'i'),
+        firstName:   new RegExp(`^${body.firstName}$`, 'i'),
         dateOfBirth: body.dateOfBirth,
     });
 
@@ -255,42 +247,65 @@ const createStudent = async (body, files, createdBy, ip) => {
         );
     }
 
+    // ── Resolve parentId ───────────────────────────────────────────────────
+    let parentId;
+
+    if (body.parentId) {
+        // Mode A: validate existing parent
+        const parentDoc = await Parent.findOne({ parentId: body.parentId.toUpperCase() });
+        if (!parentDoc) {
+            throw new ErrorResponse(
+                `Parent '${body.parentId}' not found.`,
+                404,
+                [{ field: 'parentId', code: 'PARENT_NOT_FOUND' }]
+            );
+        }
+        parentId = parentDoc.parentId;
+    } else {
+        // Mode B: create parent from father + mother details
+        const parentDoc = await createParentAccount(
+            body.father,
+            body.mother,
+            body.correspondenceEmail || body.father.email,
+            body.howDidYouKnow || '',
+            createdBy
+        );
+        parentId = parentDoc.parentId;
+    }
+
+    // ── Generate student ID ────────────────────────────────────────────────
     const year = new Date().getFullYear();
     const { studentId, serialNumber } = await generateStudentId(year);
 
-    // Handle optional photo upload
+    // ── Handle photo upload ────────────────────────────────────────────────
     let photoUrl = null;
     if (files?.photo) {
         photoUrl = await uploadStudentPhoto(files.photo, studentId);
     }
 
+    // ── Create student ─────────────────────────────────────────────────────
     const studentData = {
         studentId,
         serialNumber,
-        surname:         body.surname,
-        firstName:       body.firstName,
-        middleName:      body.middleName || '',
-        gender:          body.gender,
-        dateOfBirth:     body.dateOfBirth,
-        nationality:     body.nationality,
-        stateOfOrigin:   body.stateOfOrigin,
-        localGovernment: body.localGovernment,
-        religion:        body.religion || '',
-        bloodGroup:      body.bloodGroup || '',
-        genotype:        body.genotype || '',
-        class:           body.class,
-        schoolingOption: body.schoolingOption,
+        parentId,
+        surname:          body.surname,
+        firstName:        body.firstName,
+        middleName:       body.middleName       || '',
+        gender:           body.gender,
+        dateOfBirth:      body.dateOfBirth,
+        nationality:      body.nationality,
+        stateOfOrigin:    body.stateOfOrigin,
+        localGovernment:  body.localGovernment,
+        religion:         body.religion         || '',
+        bloodGroup:       body.bloodGroup       || '',
+        genotype:         body.genotype         || '',
+        class:            body.class,
+        schoolingOption:  body.schoolingOption,
         classPreferences: body.classPreferences || {},
-        schools:         body.schools || [],
-        father:          body.father,
-        mother:          body.mother,
-        contact: {
-            correspondenceEmail: body.correspondenceEmail,
-            howDidYouKnow:       body.howDidYouKnow || '',
-        },
-        health:        body.health || {},
-        photo:         photoUrl,
-        submittedFrom: ip,
+        schools:          body.schools          || [],
+        health:           body.health           || {},
+        photo:            photoUrl,
+        submittedFrom:    ip,
         createdBy,
     };
 
@@ -299,6 +314,7 @@ const createStudent = async (body, files, createdBy, ip) => {
     return {
         student: {
             id:           student.studentId,
+            parentId:     student.parentId,
             surname:      student.surname,
             firstName:    student.firstName,
             class:        student.class,
@@ -308,38 +324,44 @@ const createStudent = async (body, files, createdBy, ip) => {
     };
 };
 
+// ─── 1.4  Update Student ──────────────────────────────────────────────────────
+
 /**
- * 1.4 — Update an existing student record (partial).
- *
- * @param {string} id         - studentId
- * @param {object} body       - Validated partial update body
- * @param {object} files      - express-fileupload files
- * @param {string} updatedBy  - Staff ID of the authenticated user
+ * Partial update.
+ * Parent info is updated via the Parent model, not here.
+ * Passing parentId re-links a student to a different parent (admin action).
  */
 const updateStudent = async (id, body, files, updatedBy) => {
     const student = await Student.findOne({ studentId: id.toUpperCase() });
 
     if (!student) {
-        throw new ErrorResponse(`Student with ID '${id}' not found`, 404);
+        throw new ErrorResponse(`Student with ID '${id}' not found.`, 404);
+    }
+
+    // Validate new parentId if being changed
+    if (body.parentId && body.parentId !== student.parentId) {
+        const parentDoc = await Parent.findOne({ parentId: body.parentId.toUpperCase() });
+        if (!parentDoc) {
+            throw new ErrorResponse(
+                `Parent '${body.parentId}' not found.`,
+                404,
+                [{ field: 'parentId', code: 'PARENT_NOT_FOUND' }]
+            );
+        }
     }
 
     // Handle photo replacement
     if (files?.photo) {
         const newPhotoUrl = await uploadStudentPhoto(files.photo, student.studentId);
-        // Remove old photo from disk
         if (student.photo) await deleteStudentPhoto(student.photo);
         body.photo = newPhotoUrl;
     }
 
-    // Re-map flat contact fields into nested contact sub-document
-    if (body.correspondenceEmail || body.howDidYouKnow !== undefined) {
-        body.contact = {
-            correspondenceEmail: body.correspondenceEmail || student.contact.correspondenceEmail,
-            howDidYouKnow:       body.howDidYouKnow       ?? student.contact.howDidYouKnow,
-        };
-        delete body.correspondenceEmail;
-        delete body.howDidYouKnow;
-    }
+    // Strip any parent sub-documents that might have been accidentally included
+    delete body.father;
+    delete body.mother;
+    delete body.contact;
+    delete body.correspondenceEmail;
 
     body.lastUpdatedBy = updatedBy;
 
@@ -347,21 +369,20 @@ const updateStudent = async (id, body, files, updatedBy) => {
         { studentId: id.toUpperCase() },
         { $set: body },
         { new: true, runValidators: true }
-    ).lean({ virtuals: true });
+    )
+        .populate('parent', '-password -__v')
+        .lean({ virtuals: true });
 
     return { student: toDetailView(updated) };
 };
 
-/**
- * 1.5 — Hard-delete a student record and its photo.
- *
- * @param {string} id  - studentId
- */
+// ─── 1.5  Delete Student ──────────────────────────────────────────────────────
+
 const deleteStudent = async (id) => {
     const student = await Student.findOne({ studentId: id.toUpperCase() });
 
     if (!student) {
-        throw new ErrorResponse(`Student with ID '${id}' not found`, 404);
+        throw new ErrorResponse(`Student with ID '${id}' not found.`, 404);
     }
 
     if (student.photo) await deleteStudentPhoto(student.photo);
@@ -369,82 +390,39 @@ const deleteStudent = async (id) => {
     await student.deleteOne();
 };
 
-/**
- * 1.6 — Update a student's status.
- *
- * @param {string} id     - studentId
- * @param {string} status - New status value
- * @param {string} reason - Optional reason
- * @param {string} updatedBy
- */
+// ─── 1.6  Update Status ───────────────────────────────────────────────────────
+
 const updateStudentStatus = async (id, status, reason, updatedBy) => {
     const student = await Student.findOneAndUpdate(
         { studentId: id.toUpperCase() },
-        {
-            $set: {
-                status,
-                statusReason:  reason || '',
-                lastUpdatedBy: updatedBy,
-            },
-        },
+        { $set: { status, statusReason: reason || '', lastUpdatedBy: updatedBy } },
         { new: true, runValidators: true }
     );
 
     if (!student) {
-        throw new ErrorResponse(`Student with ID '${id}' not found`, 404);
+        throw new ErrorResponse(`Student with ID '${id}' not found.`, 404);
     }
 
-    return {
-        id:        student.studentId,
-        status:    student.status,
-        updatedAt: student.updatedAt,
-    };
+    return { id: student.studentId, status: student.status, updatedAt: student.updatedAt };
 };
 
-/**
- * 1.7 — Bulk-promote students from one class to another.
- *
- * @param {string}   fromClass
- * @param {string}   toClass
- * @param {string[]} studentIds
- * @param {string}   session
- * @param {string}   term
- * @param {string}   updatedBy
- */
+// ─── 1.7  Promote Students ───────────────────────────────────────────────────
+
 const promoteStudents = async (fromClass, toClass, studentIds, session, term, updatedBy) => {
     const upperIds = studentIds.map((id) => id.toUpperCase());
 
-    // Only promote students who are currently in fromClass
     const result = await Student.updateMany(
-        {
-            studentId: { $in: upperIds },
-            class:     fromClass,
-            status:    'Active',
-        },
-        {
-            $set: {
-                class:         toClass,
-                lastUpdatedBy: updatedBy,
-            },
-        }
+        { studentId: { $in: upperIds }, class: fromClass, status: 'Active' },
+        { $set: { class: toClass, lastUpdatedBy: updatedBy } }
     );
 
     const failed = studentIds.length - result.modifiedCount;
 
-    return {
-        promoted: result.modifiedCount,
-        failed,
-        session:  session || null,
-    };
+    return { promoted: result.modifiedCount, failed, session: session || null };
 };
 
-/**
- * 1.8 — Get attendance summary for a student in a given term/session.
- *
- * @param {string} id      - studentId
- * @param {string} term
- * @param {string} session
- */
+// ─── 1.8  Attendance Summary ──────────────────────────────────────────────────
+
 const getAttendanceSummary = async (id, term, session) => {
     const student = await Student.findOne(
         { studentId: id.toUpperCase() },
@@ -452,18 +430,17 @@ const getAttendanceSummary = async (id, term, session) => {
     ).lean();
 
     if (!student) {
-        throw new ErrorResponse(`Student with ID '${id}' not found`, 404);
+        throw new ErrorResponse(`Student with ID '${id}' not found.`, 404);
     }
 
-    // Filter by term + session if provided
     let records = student.attendanceRecords || [];
     if (term)    records = records.filter((r) => r.term    === term);
     if (session) records = records.filter((r) => r.session === session);
 
-    const totalDays      = records.length;
-    const daysPresent    = records.filter((r) => r.status === 'Present').length;
-    const daysAbsent     = records.filter((r) => r.status === 'Absent').length;
-    const attendancePct  = totalDays > 0 ? Math.round((daysPresent / totalDays) * 100) : 0;
+    const totalDays     = records.length;
+    const daysPresent   = records.filter((r) => r.status === 'Present').length;
+    const daysAbsent    = records.filter((r) => r.status === 'Absent').length;
+    const attendancePct = totalDays > 0 ? Math.round((daysPresent / totalDays) * 100) : 0;
 
     const termLabel = [term, session].filter(Boolean).join(' ') || 'All Terms';
 
@@ -474,7 +451,7 @@ const getAttendanceSummary = async (id, term, session) => {
         daysPresent,
         daysAbsent,
         attendancePercentage: attendancePct,
-        records:              records.map(({ date, status, reason }) => ({
+        records: records.map(({ date, status, reason }) => ({
             date,
             status,
             ...(reason && { reason }),

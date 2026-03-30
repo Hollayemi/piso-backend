@@ -20,12 +20,14 @@
  *     in every issued token so the protect middleware can validate it.
  */
 
-const jwt    = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-const Staff        = require('../model/staff.model');
-const Settings     = require('../model/settings.model');
+const Staff = require('../model/staff.model');
+const Settings = require('../model/settings.model');
 const ErrorResponse = require('../utils/errorResponse');
+
+const parentAuthService = require("./parentAuthService")
 
 // ─── Token factory ────────────────────────────────────────────────────────────
 
@@ -48,18 +50,18 @@ const signToken = (payload) =>
  * @param {object} doc - Staff Mongoose lean doc
  */
 const toProfileView = (doc) => ({
-    id:               doc.staffId,
-    surname:          doc.surname,
-    firstName:        doc.firstName,
-    middleName:       doc.middleName || '',
-    fullName:         [doc.surname, doc.firstName, doc.middleName].filter(Boolean).join(' '),
-    email:            doc.email,
-    role:             doc.role || doc.staffType,   // role is stored as staffType on the model
-    staffType:        doc.staffType,
-    department:       doc.department,
-    phone:            doc.phone,
-    status:           doc.status,
-    photo:            doc.photo ?? null,
+    id: doc.staffId,
+    surname: doc.surname,
+    firstName: doc.firstName,
+    middleName: doc.middleName || '',
+    fullName: [doc.surname, doc.firstName, doc.middleName].filter(Boolean).join(' '),
+    email: doc.email,
+    role: doc.role || doc.staffType,   // role is stored as staffType on the model
+    staffType: doc.staffType,
+    department: doc.department,
+    phone: doc.phone,
+    status: doc.status,
+    photo: doc.photo ?? null,
     mustResetPassword: doc.mustResetPassword ?? false,
 });
 
@@ -74,55 +76,60 @@ const toProfileView = (doc) => ({
  * @param {string} email
  * @param {string} password
  */
-const login = async (email, password) => {
+const login = async (email, password, login_type) => {
     // Explicitly select password (select: false in schema)
-const staff = await Staff.findOne({ email: email.toLowerCase() })
-    .select('+password email staffType surname firstName middleName status mustResetPassword staffId _id');
+    const userType = ""
+    if (login_type === "admin") {
+        const staff = await Staff.findOne({ email: email.toLowerCase() })
+            .select('+password email staffType surname firstName middleName status mustResetPassword staffId _id');
 
         console.log(staff)
 
-    if (!staff) {
-        throw new ErrorResponse('Invalid email or password', 401, [
-            { code: 'INVALID_CREDENTIALS' },
-        ]);
+        if (!staff) {
+            throw new ErrorResponse('Invalid email or password', 401, [
+                { code: 'INVALID_CREDENTIALS' },
+            ]);
+        }
+
+        if (staff.status === 'Inactive') {
+            throw new ErrorResponse(
+                'Your account has been deactivated. Please contact the administrator.',
+                403,
+                [{ code: 'ACCOUNT_INACTIVE' }]
+            );
+        }
+
+        // Compare password
+        const isMatch = await bcrypt.compare(password, staff.password);
+        if (!isMatch) {
+            throw new ErrorResponse('Invalid email or password', 401, [
+                { code: 'INVALID_CREDENTIALS' },
+            ]);
+        }
+
+        // Read current sessionVersion from Settings
+        const settings = await Settings.getSingleton();
+        const sessionVersion = settings.security?.sessionVersion ?? 1;
+
+        // Build the role for the JWT — the Staff model stores role as staffType.
+        // Map privileged staffTypes to system roles; everyone else is 'teacher'.
+        const role = resolveRole(staff.staffType);
+
+        const token = signToken({
+            id: staff.staffId,
+            role,
+            email: staff.email,
+            name: `${staff.surname} ${staff.firstName}`,
+            sessionVersion,
+        });
+
+        return {
+            token,
+            staff: toProfileView(staff),
+        }
+    } else if (login_type === "parent") {
+        return await parentAuthService.login(email, password);
     }
-
-    if (staff.status === 'Inactive') {
-        throw new ErrorResponse(
-            'Your account has been deactivated. Please contact the administrator.',
-            403,
-            [{ code: 'ACCOUNT_INACTIVE' }]
-        );
-    }
-
-    // Compare password
-    const isMatch = await bcrypt.compare(password, staff.password);
-    if (!isMatch) {
-        throw new ErrorResponse('Invalid email or password', 401, [
-            { code: 'INVALID_CREDENTIALS' },
-        ]);
-    }
-
-    // Read current sessionVersion from Settings
-    const settings       = await Settings.getSingleton();
-    const sessionVersion = settings.security?.sessionVersion ?? 1;
-
-    // Build the role for the JWT — the Staff model stores role as staffType.
-    // Map privileged staffTypes to system roles; everyone else is 'teacher'.
-    const role = resolveRole(staff.staffType);
-    
-    const token = signToken({
-        id:             staff.staffId,
-        role,
-        email:          staff.email,
-        name:           `${staff.surname} ${staff.firstName}`,
-        sessionVersion,
-    });
-
-    return {
-        token,
-        staff: toProfileView(staff),
-    };
 };
 
 // ─── Role resolver ────────────────────────────────────────────────────────────
@@ -138,30 +145,30 @@ const staff = await Staff.findOne({ email: email.toLowerCase() })
  */
 const resolveRole = (staffType) => {
     const roleMap = {
-        super_admin:           'super_admin',
-        principal:             'super_admin',
+        super_admin: 'super_admin',
+        principal: 'super_admin',
         vice_principal_academic: 'principal',
-        vice_principal_admin:    'principal',
-        bursar:                'accountant',
+        vice_principal_admin: 'principal',
+        bursar: 'accountant',
         // All teaching roles → teacher
-        teacher:               'teacher',
-        class_teacher:         'teacher',
-        hod_science:           'teacher',
-        hod_arts:              'teacher',
-        hod_commercial:        'teacher',
-        ict_instructor:        'teacher',
+        teacher: 'teacher',
+        class_teacher: 'teacher',
+        hod_science: 'teacher',
+        hod_arts: 'teacher',
+        hod_commercial: 'teacher',
+        ict_instructor: 'teacher',
         // Support / admin roles → admin
-        secretary:             'admin',
-        librarian:             'admin',
-        lab_technician:        'admin',
-        nurse:                 'admin',
-        counselor:             'admin',
-        boarding_master:       'admin',
-        security:              'admin',
-        driver:                'admin',
-        cook:                  'admin',
-        cleaner:               'admin',
-        maintenance:           'admin',
+        secretary: 'admin',
+        librarian: 'admin',
+        lab_technician: 'admin',
+        nurse: 'admin',
+        counselor: 'admin',
+        boarding_master: 'admin',
+        security: 'admin',
+        driver: 'admin',
+        cook: 'admin',
+        cleaner: 'admin',
+        maintenance: 'admin',
     };
 
     return roleMap[staffType] ?? 'teacher';
@@ -240,7 +247,7 @@ const changePassword = async (staffId, currentPassword, newPassword) => {
 
     // Hash and save
     const salt = await bcrypt.genSalt(12);
-    staff.password          = await bcrypt.hash(newPassword, salt);
+    staff.password = await bcrypt.hash(newPassword, salt);
     staff.mustResetPassword = false;
     await staff.save();
 

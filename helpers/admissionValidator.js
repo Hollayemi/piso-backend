@@ -1,21 +1,14 @@
-/**
- * admissionValidator.js
- *
- * Joi validation schemas for the Admissions module.
- * Used as middleware via the validate() wrapper.
- */
-
 const Joi = require('joi');
 
 // ─── Reusable sub-schemas ─────────────────────────────────────────────────────
 
-const parentSchema = Joi.object({
+const guardianSchema = Joi.object({
     name:          Joi.string().trim().required().label('Name'),
     occupation:    Joi.string().trim().required().label('Occupation'),
     officeAddress: Joi.string().trim().required().label('Office Address'),
     homeAddress:   Joi.string().trim().required().label('Home Address'),
     homePhone:     Joi.string().trim().required().label('Home Phone'),
-    whatsApp:      Joi.string().trim().required().label('WhatsApp'),
+    whatsApp:      Joi.string().trim().optional().allow("").label('WhatsApp'),
     email:         Joi.string().email().lowercase().trim().required().label('Email'),
 });
 
@@ -38,20 +31,10 @@ const healthSchema = Joi.object({
     foodAllergy:       Joi.string().allow('').optional(),
 });
 
-const contactSchema = Joi.object({
-    correspondenceEmail: Joi.string().email().lowercase().trim().required()
-        .label('Correspondence Email'),
-    howDidYouKnow: Joi.string().allow('').optional(),
-});
-
-const classPreferencesSchema = Joi.object({
-    presentClass:      Joi.string().trim().allow('').optional(),
-    classInterestedIn: Joi.string().trim().allow('').optional(),
-});
-
 // ─── 1.3  Submit Application ──────────────────────────────────────────────────
 
 const submitApplicationSchema = Joi.object({
+    // Child details
     surname:         Joi.string().trim().max(50).required().label('Surname'),
     firstName:       Joi.string().trim().max(50).required().label('First Name'),
     middleName:      Joi.string().trim().max(50).allow('').optional(),
@@ -63,12 +46,23 @@ const submitApplicationSchema = Joi.object({
     stateOfOrigin:   Joi.string().trim().required().label('State of Origin'),
     localGovernment: Joi.string().trim().required().label('Local Government'),
     schoolingOption: Joi.string().valid('day', 'boarding').required().label('Schooling Option'),
-    classPreferences: classPreferencesSchema.optional(),
-    father:          parentSchema.required().label('Father'),
-    mother:          parentSchema.required().label('Mother'),
-    schools:         Joi.object().optional(),
-    health:          healthSchema.optional(),
-    contact:         contactSchema.required(),
+
+    classPreferences: Joi.object({
+        presentClass:      Joi.string().trim().allow('').optional(),
+        classInterestedIn: Joi.string().trim().allow('').optional(),
+    }).optional(),
+
+    // Parents — required on the application
+    father: guardianSchema.required().label('Father'),
+    mother: guardianSchema.required().label('Mother'),
+
+    correspondenceEmail: Joi.string().email().lowercase().trim().required()
+        .label('Correspondence Email'),
+
+    howDidYouKnow: Joi.string().trim().allow('').optional(),
+
+    schools: Joi.object().optional(),
+    health:  healthSchema.optional(),
 });
 
 // ─── 1.4  Update Application Status ──────────────────────────────────────────
@@ -105,9 +99,7 @@ const updateScreeningRecordSchema = Joi.object({
 const sendOfferLetterSchema = Joi.object({
     acceptanceDeadline: Joi.date().iso().greater('now').required()
         .label('Acceptance Deadline')
-        .messages({
-            'date.greater': 'Acceptance deadline must be a future date',
-        }),
+        .messages({ 'date.greater': 'Acceptance deadline must be a future date' }),
     resend: Joi.boolean().optional().default(false),
 });
 
@@ -122,12 +114,6 @@ const updateOfferAcceptanceStatusSchema = Joi.object({
 
 // ─── Middleware factory ───────────────────────────────────────────────────────
 
-/**
- * Returns an Express middleware that validates req.body against a Joi schema.
- * On failure, responds with 400 and a standardised error shape.
- *
- * @param {Joi.Schema} schema
- */
 const validate = (schema) => (req, res, next) => {
     const { error, value } = schema.validate(req.body, {
         abortEarly:   false,
@@ -148,16 +134,16 @@ const validate = (schema) => (req, res, next) => {
         });
     }
 
-    req.body = value; // Replace with stripped/coerced value
+    req.body = value;
     next();
 };
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
-    validateSubmitApplication:          validate(submitApplicationSchema),
-    validateUpdateApplicationStatus:    validate(updateApplicationStatusSchema),
-    validateUpdateScreeningRecord:      validate(updateScreeningRecordSchema),
-    validateSendOfferLetter:            validate(sendOfferLetterSchema),
+    validateSubmitApplication:           validate(submitApplicationSchema),
+    validateUpdateApplicationStatus:     validate(updateApplicationStatusSchema),
+    validateUpdateScreeningRecord:       validate(updateScreeningRecordSchema),
+    validateSendOfferLetter:             validate(sendOfferLetterSchema),
     validateUpdateOfferAcceptanceStatus: validate(updateOfferAcceptanceStatusSchema),
 };
