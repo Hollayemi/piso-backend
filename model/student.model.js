@@ -135,7 +135,7 @@ const StudentSchema = new mongoose.Schema(
         gender: {
             type:     String,
             required: [true, 'Gender is required'],
-            enum:     ['Male', 'Female'],
+            enum:     ['male', 'female'],
         },
 
         dateOfBirth: {
@@ -189,7 +189,7 @@ const StudentSchema = new mongoose.Schema(
         schoolingOption: {
             type:     String,
             required: [true, 'Schooling option is required'],
-            enum:     ['Day', 'Boarding'],
+            enum:     ['day', 'boarding'],
         },
 
         status: {

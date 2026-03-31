@@ -106,7 +106,8 @@ const settingsRoutes  = require('./routes/settingsRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const { seedStaff } = require('./scripts/seedStaffs');
 const parentFinanceRoutes = require('./routes/parentFinanceRoutes');
-
+const parentAdmissionsRoutes = require('./routes/parentAdmissionsRoutes');
+const parentChildrenRoutes = require('./routes/parentChildrenRoutes');
 // ─── Route Mounts ─────────────────────────────────────────────────────────────
 
 app.use('/api/v1/auth',       authRoutes);
@@ -119,6 +120,8 @@ app.use('/api/v1/inventory',  inventoryRoutes);
 app.use('/api/v1/transport',  transportRoutes);
 app.use('/api/v1/settings',   settingsRoutes);
 app.use('/api/v1/dashboard',  dashboardRoutes);
+app.use('/api/v1/parent/admissions', parentAdmissionsRoutes); 
+app.use('/api/v1', parentChildrenRoutes);
 app.use('/api/v1', parentFinanceRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────

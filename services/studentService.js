@@ -12,10 +12,11 @@
  *   - All read methods populate the parent document on demand.
  */
 
-const path   = require('path');
-const fs     = require('fs').promises;
+const path = require('path');
+const fs = require('fs').promises;
 const Student = require('../model/student.model');
-const Parent  = require('../model/parent.model');
+const Admission = require('../model/admission.model');
+const Parent = require('../model/parent.model');
 const { createParentAccount } = require('./parentAuthService');
 const ErrorResponse = require('../utils/errorResponse');
 
@@ -29,8 +30,8 @@ const generateStudentId = async (year = new Date().getFullYear()) => {
         { serialNumber: 1 }
     ).sort({ serialNumber: -1 });
 
-    const nextSerial    = latest ? latest.serialNumber + 1 : 1;
-    const paddedSerial  = String(nextSerial).padStart(4, '0');
+    const nextSerial = latest ? latest.serialNumber + 1 : 1;
+    const paddedSerial = String(nextSerial).padStart(4, '0');
 
     return { studentId: `${yearPrefix}${paddedSerial}`, serialNumber: nextSerial };
 };
@@ -39,8 +40,8 @@ const generateStudentId = async (year = new Date().getFullYear()) => {
 
 const ALLOWED_IMAGE_TYPES = {
     'image/jpeg': 'jpg',
-    'image/jpg':  'jpg',
-    'image/png':  'png',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
 };
 const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -55,7 +56,7 @@ const uploadStudentPhoto = async (photoFile, studentId) => {
     const uploadDir = path.join(__dirname, '../uploads/students');
     await fs.mkdir(uploadDir, { recursive: true });
 
-    const ext      = ALLOWED_IMAGE_TYPES[photoFile.mimetype];
+    const ext = ALLOWED_IMAGE_TYPES[photoFile.mimetype];
     const filename = `${studentId}.${ext}`;
     const filePath = path.join(uploadDir, filename);
 
@@ -78,31 +79,31 @@ const deleteStudentPhoto = async (photoUrl) => {
 const toListItem = (doc) => {
     const p = doc.parent || {};
     return {
-        id:              doc.studentId,
-        parentId:        doc.parentId,
-        surname:         doc.surname,
-        firstName:       doc.firstName,
-        middleName:      doc.middleName || '',
-        gender:          doc.gender,
-        dateOfBirth:     doc.dateOfBirth,
-        class:           doc.class,
+        id: doc.studentId,
+        parentId: doc.parentId,
+        surname: doc.surname,
+        firstName: doc.firstName,
+        middleName: doc.middleName || '',
+        gender: doc.gender,
+        dateOfBirth: doc.dateOfBirth,
+        class: doc.class,
         schoolingOption: doc.schoolingOption,
-        status:          doc.status,
-        stateOfOrigin:   doc.stateOfOrigin,
-        bloodGroup:      doc.bloodGroup || '',
-        genotype:        doc.genotype   || '',
+        status: doc.status,
+        stateOfOrigin: doc.stateOfOrigin,
+        bloodGroup: doc.bloodGroup || '',
+        genotype: doc.genotype || '',
         // Derived from parent
-        familyName:           p.familyName           || '',
-        fatherName:           p.father?.name          || '',
-        fatherPhone:          p.father?.homePhone      || '',
-        motherName:           p.mother?.name          || '',
-        motherPhone:          p.mother?.homePhone      || '',
-        correspondenceEmail:  p.correspondenceEmail   || '',
-        admissionDate:   doc.admissionDate,
-        classTeacher:    doc.classTeacher || '',
-        fees:            doc.fees ?? {},
-        attendance:      doc.attendancePercentage ?? 0,
-        photo:           doc.photo ?? null,
+        familyName: p.familyName || '',
+        fatherName: p.father?.name || '',
+        fatherPhone: p.father?.homePhone || '',
+        motherName: p.mother?.name || '',
+        motherPhone: p.mother?.homePhone || '',
+        correspondenceEmail: p.correspondenceEmail || '',
+        admissionDate: doc.admissionDate,
+        classTeacher: doc.classTeacher || '',
+        fees: doc.fees ?? {},
+        attendance: doc.attendancePercentage ?? 0,
+        photo: doc.photo ?? null,
     };
 };
 
@@ -112,53 +113,53 @@ const toListItem = (doc) => {
 const toDetailView = (doc) => {
     const p = doc.parent || {};
     return {
-        id:               doc.studentId,
-        parentId:         doc.parentId,
-        surname:          doc.surname,
-        firstName:        doc.firstName,
-        middleName:       doc.middleName || '',
-        gender:           doc.gender,
-        dateOfBirth:      doc.dateOfBirth,
-        class:            doc.class,
-        schoolingOption:  doc.schoolingOption,
-        status:           doc.status,
-        statusReason:     doc.statusReason || '',
-        stateOfOrigin:    doc.stateOfOrigin,
-        localGovernment:  doc.localGovernment,
-        nationality:      doc.nationality,
-        religion:         doc.religion || '',
-        bloodGroup:       doc.bloodGroup || '',
-        genotype:         doc.genotype   || '',
-        admissionDate:    doc.admissionDate,
-        classTeacher:     doc.classTeacher || '',
+        id: doc.studentId,
+        parentId: doc.parentId,
+        surname: doc.surname,
+        firstName: doc.firstName,
+        middleName: doc.middleName || '',
+        gender: doc.gender,
+        dateOfBirth: doc.dateOfBirth,
+        class: doc.class,
+        schoolingOption: doc.schoolingOption,
+        status: doc.status,
+        statusReason: doc.statusReason || '',
+        stateOfOrigin: doc.stateOfOrigin,
+        localGovernment: doc.localGovernment,
+        nationality: doc.nationality,
+        religion: doc.religion || '',
+        bloodGroup: doc.bloodGroup || '',
+        genotype: doc.genotype || '',
+        admissionDate: doc.admissionDate,
+        classTeacher: doc.classTeacher || '',
         classPreferences: doc.classPreferences ?? {},
-        schools:          doc.schools ?? [],
-        health:           doc.health  ?? {},
-        fees:             doc.fees    ?? {},
-        attendance:       doc.attendancePercentage ?? 0,
-        photo:            doc.photo ?? null,
+        schools: doc.schools ?? [],
+        health: doc.health ?? {},
+        fees: doc.fees ?? {},
+        attendance: doc.attendancePercentage ?? 0,
+        photo: doc.photo ?? null,
         // Full parent block
         parent: {
-            id:                  p.parentId             || '',
-            familyName:          p.familyName           || '',
-            correspondenceEmail: p.correspondenceEmail  || '',
+            id: p.parentId || '',
+            familyName: p.familyName || '',
+            correspondenceEmail: p.correspondenceEmail || '',
             father: {
-                name:          p.father?.name          || '',
-                email:         p.father?.email         || '',
-                phone:         p.father?.homePhone      || '',
-                whatsApp:      p.father?.whatsApp       || '',
-                occupation:    p.father?.occupation     || '',
-                officeAddress: p.father?.officeAddress  || '',
-                homeAddress:   p.father?.homeAddress    || '',
+                name: p.father?.name || '',
+                email: p.father?.email || '',
+                phone: p.father?.homePhone || '',
+                whatsApp: p.father?.whatsApp || '',
+                occupation: p.father?.occupation || '',
+                officeAddress: p.father?.officeAddress || '',
+                homeAddress: p.father?.homeAddress || '',
             },
             mother: {
-                name:          p.mother?.name          || '',
-                email:         p.mother?.email         || '',
-                phone:         p.mother?.homePhone      || '',
-                whatsApp:      p.mother?.whatsApp       || '',
-                occupation:    p.mother?.occupation     || '',
-                officeAddress: p.mother?.officeAddress  || '',
-                homeAddress:   p.mother?.homeAddress    || '',
+                name: p.mother?.name || '',
+                email: p.mother?.email || '',
+                phone: p.mother?.homePhone || '',
+                whatsApp: p.mother?.whatsApp || '',
+                occupation: p.mother?.occupation || '',
+                officeAddress: p.mother?.officeAddress || '',
+                homeAddress: p.mother?.homeAddress || '',
             },
         },
     };
@@ -167,9 +168,9 @@ const toDetailView = (doc) => {
 // ─── 1.1  Get All Students ────────────────────────────────────────────────────
 
 const getAllStudents = async ({ page, limit, search, class: cls, status, schoolingOption, gender }) => {
-    const pageNum  = Math.max(parseInt(page,  10) || 1,  1);
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const limitNum = Math.min(parseInt(limit, 10) || 15, 100);
-    const skip     = (pageNum - 1) * limitNum;
+    const skip = (pageNum - 1) * limitNum;
 
     const filter = {};
 
@@ -177,15 +178,15 @@ const getAllStudents = async ({ page, limit, search, class: cls, status, schooli
         // Search across both student fields and parent fields via a pipeline,
         // but for simplicity keep the basic approach and include name searches.
         filter.$or = [
-            { surname:   { $regex: search, $options: 'i' } },
+            { surname: { $regex: search, $options: 'i' } },
             { firstName: { $regex: search, $options: 'i' } },
             { studentId: { $regex: search, $options: 'i' } },
         ];
     }
-    if (cls)            filter.class           = { $regex: cls, $options: 'i' };
-    if (status)         filter.status          = status;
+    if (cls) filter.class = { $regex: cls, $options: 'i' };
+    if (status) filter.status = status;
     if (schoolingOption) filter.schoolingOption = schoolingOption;
-    if (gender)         filter.gender          = gender;
+    if (gender) filter.gender = gender;
 
     const [students, total] = await Promise.all([
         Student.find(filter)
@@ -198,11 +199,11 @@ const getAllStudents = async ({ page, limit, search, class: cls, status, schooli
     ]);
 
     return {
-        students:   students.map(toListItem),
+        students: students.map(toListItem),
         pagination: {
             total,
-            page:       pageNum,
-            limit:      limitNum,
+            page: pageNum,
+            limit: limitNum,
             totalPages: Math.ceil(total / limitNum),
         },
     };
@@ -234,8 +235,8 @@ const getStudentById = async (id) => {
 const createStudent = async (body, files, createdBy, ip) => {
     // ── Duplicate check ────────────────────────────────────────────────────
     const existing = await Student.findOne({
-        surname:     new RegExp(`^${body.surname}$`, 'i'),
-        firstName:   new RegExp(`^${body.firstName}$`, 'i'),
+        surname: new RegExp(`^${body.surname}$`, 'i'),
+        firstName: new RegExp(`^${body.firstName}$`, 'i'),
         dateOfBirth: body.dateOfBirth,
     });
 
@@ -288,24 +289,24 @@ const createStudent = async (body, files, createdBy, ip) => {
         studentId,
         serialNumber,
         parentId,
-        surname:          body.surname,
-        firstName:        body.firstName,
-        middleName:       body.middleName       || '',
-        gender:           body.gender,
-        dateOfBirth:      body.dateOfBirth,
-        nationality:      body.nationality,
-        stateOfOrigin:    body.stateOfOrigin,
-        localGovernment:  body.localGovernment,
-        religion:         body.religion         || '',
-        bloodGroup:       body.bloodGroup       || '',
-        genotype:         body.genotype         || '',
-        class:            body.class,
-        schoolingOption:  body.schoolingOption,
+        surname: body.surname,
+        firstName: body.firstName,
+        middleName: body.middleName || '',
+        gender: body.gender,
+        dateOfBirth: body.dateOfBirth,
+        nationality: body.nationality,
+        stateOfOrigin: body.stateOfOrigin,
+        localGovernment: body.localGovernment,
+        religion: body.religion || '',
+        bloodGroup: body.bloodGroup || '',
+        genotype: body.genotype || '',
+        class: body.class,
+        schoolingOption: body.schoolingOption,
         classPreferences: body.classPreferences || {},
-        schools:          body.schools          || [],
-        health:           body.health           || {},
-        photo:            photoUrl,
-        submittedFrom:    ip,
+        schools: body.schools || [],
+        health: body.health || {},
+        photo: photoUrl,
+        submittedFrom: ip,
         createdBy,
     };
 
@@ -313,17 +314,63 @@ const createStudent = async (body, files, createdBy, ip) => {
 
     return {
         student: {
-            id:           student.studentId,
-            parentId:     student.parentId,
-            surname:      student.surname,
-            firstName:    student.firstName,
-            class:        student.class,
-            status:       student.status,
+            id: student.studentId,
+            parentId: student.parentId,
+            surname: student.surname,
+            firstName: student.firstName,
+            class: student.class,
+            status: student.status,
             admissionDate: student.admissionDate,
         },
     };
 };
 
+
+const migrateStudent = async (applicationId, parentId) => {
+    const applicant = await Admission.findOne({ applicationId: applicationId.toUpperCase() })
+    const year = new Date().getFullYear();
+    const { studentId, serialNumber } = await generateStudentId(year);
+
+    console.log({applicant, studentId, serialNumber})
+
+    const studentData = {
+        studentId,
+        serialNumber,
+        parentId,
+        surname: applicant.surname,
+        firstName: applicant.firstName,
+        middleName: applicant.middleName || '',
+        gender: applicant.gender,
+        dateOfBirth: applicant.dateOfBirth,
+        nationality: applicant.nationality,
+        stateOfOrigin: applicant.stateOfOrigin,
+        localGovernment: applicant.localGovernment,
+        religion: applicant.religion || '',
+        bloodGroup: applicant.bloodGroup || '',
+        genotype: applicant.genotype || '',
+        class: applicant?.offer?.class || applicant.classPreferences.classInterestedIn,
+        schoolingOption: applicant.schoolingOption,
+        classPreferences: applicant.classPreferences || {},
+        schools: applicant.schools || [],
+        health: applicant.health || {},
+        // photo: photoUrl,
+        createdBy: "parent",
+    };
+
+    const student = await Student.create(studentData);
+
+    return {
+        student: {
+            id: student.studentId,
+            parentId: student.parentId,
+            surname: student.surname,
+            firstName: student.firstName,
+            class: student.class,
+            status: student.status,
+            admissionDate: student.admissionDate,
+        },
+    };
+}
 // ─── 1.4  Update Student ──────────────────────────────────────────────────────
 
 /**
@@ -434,19 +481,19 @@ const getAttendanceSummary = async (id, term, session) => {
     }
 
     let records = student.attendanceRecords || [];
-    if (term)    records = records.filter((r) => r.term    === term);
+    if (term) records = records.filter((r) => r.term === term);
     if (session) records = records.filter((r) => r.session === session);
 
-    const totalDays     = records.length;
-    const daysPresent   = records.filter((r) => r.status === 'Present').length;
-    const daysAbsent    = records.filter((r) => r.status === 'Absent').length;
+    const totalDays = records.length;
+    const daysPresent = records.filter((r) => r.status === 'Present').length;
+    const daysAbsent = records.filter((r) => r.status === 'Absent').length;
     const attendancePct = totalDays > 0 ? Math.round((daysPresent / totalDays) * 100) : 0;
 
     const termLabel = [term, session].filter(Boolean).join(' ') || 'All Terms';
 
     return {
-        studentId:            student.studentId,
-        term:                 termLabel,
+        studentId: student.studentId,
+        term: termLabel,
         totalDays,
         daysPresent,
         daysAbsent,
@@ -465,6 +512,7 @@ module.exports = {
     getAllStudents,
     getStudentById,
     createStudent,
+    migrateStudent,
     updateStudent,
     deleteStudent,
     updateStudentStatus,

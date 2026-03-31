@@ -97,14 +97,12 @@ const protect = async (req, res, next) => {
             user = await Parent.findOne({parentId: decoded.id});
             req.user = {
                 id: user.parentId,
-                role: decoded.role,
+                role: "parent",
                 email: user.email,
                 name: user.familyName,
                 staffDoc: user,          // full doc available if needed
             };
         }
-
-        console.log({ user })
 
         if (!user) {
             return next(new ErrorResponse('User account not found', 401));
@@ -134,10 +132,8 @@ const protect = async (req, res, next) => {
             );
         }
 
-        console.log({ user })
-
         // Attach a compact user object to the request
-        req.user = user
+        // req.user
 
         next();
     } catch (err) {
