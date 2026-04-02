@@ -33,6 +33,7 @@ exports.getChildFeeRecord = asyncHandler(async (req, res) => {
  * @access  parent
  */
 exports.getAllChildrenFees = asyncHandler(async (req, res) => {
+    console.log({linkedStudentIds: req.parent.linkedStudentIds, query: req.query})
     const result = await parentFinanceService.getAllChildrenFees(
         req.parent.linkedStudentIds,
         req.query

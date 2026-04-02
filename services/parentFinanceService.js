@@ -16,16 +16,20 @@
 const { FeeRecord, Payment, Invoice } = require('../model/finance.model');
 const Student       = require('../model/student.model');
 const ErrorResponse = require('../utils/errorResponse');
+const SettingsModel = require("../model/settings.model")
 
 // ─── Term helper ──────────────────────────────────────────────────────────────
 
-const currentTerm = () => {
-    const now   = new Date();
-    const month = now.getMonth();
-    const year  = now.getFullYear();
-    if (month >= 8 && month <= 11) return `1st Term ${year}/${year + 1}`;
-    if (month >= 0 && month <= 2)  return `2nd Term ${year - 1}/${year}`;
-    return `3rd Term ${year - 1}/${year}`;
+const currentTerm = async () => {
+    const settings = await SettingsModel.getSingleton();
+    const term = await settings.getCurrentTerm();
+    return term.name
+};
+
+const currentSession = async () => {
+    const settings = await SettingsModel.getSingleton();
+    const session = await settings.getCurrentSession();
+    return session.name
 };
 
 // ─── Guard helper ─────────────────────────────────────────────────────────────
@@ -131,8 +135,10 @@ const getAllChildrenFees = async (linkedStudentIds, { term } = {}) => {
         return { children: [], totalExpected: 0, totalPaid: 0, totalOutstanding: 0 };
     }
 
-    const resolvedTerm = term || currentTerm();
-
+    
+    const resolvedTerm = term || await currentTerm();
+    
+    console.log({linkedStudentIds, resolvedTerm})
     // Pull all student snapshots in one query
     const students = await Student.find(
         { studentId: { $in: linkedStudentIds }, status: 'Active' },

@@ -53,6 +53,12 @@ const FeeRecordSchema = new mongoose.Schema(
             // e.g. "1st Term 2025/2026"
         },
 
+        session: {
+            type:     String,
+            required: [true, 'session is required'],
+            trim:     true,
+        },
+
         // ── Fee structure ──────────────────────────────────────────────────
         totalFee: {
             type:    Number,
@@ -256,6 +262,11 @@ const InvoiceSchema = new mongoose.Schema(
             trim:     true,
         },
 
+        session: {
+            type:     String,
+            required: [true, 'session is required'],
+            trim:     true,
+        },
         issuedDate: { type: Date, default: Date.now },
         dueDate:    { type: Date, required: [true, 'dueDate is required'] },
 

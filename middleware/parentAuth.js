@@ -31,7 +31,6 @@ const parentAuthMiddleware = async (req, res, next) => {
     }
 
     // Role check — only parents may use parent-portal routes
-    console.log("====>", req.user)
     // if (req.user.parentId) {
     //     return next(
     //         new ErrorResponse(

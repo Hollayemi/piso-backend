@@ -23,6 +23,7 @@
  */
 
 const { FeeRecord, Payment, Invoice } = require('../model/finance.model');
+const SettingsModel = require("../model/settings.model")
 const ErrorResponse = require('../utils/errorResponse');
 const { deriveFeeCategory, termSlotName } = require('./settingsService');
 // const { deriveFeeCategory } = require('./settingsService');
@@ -33,15 +34,18 @@ const { deriveFeeCategory, termSlotName } = require('./settingsService');
  * Returns the current term string e.g. "1st Term 2025/2026".
  * Nigerian school year: Sept – July.
  */
-const currentTerm = () => {
-    const now   = new Date();
-    const month = now.getMonth(); // 0-based
-    const year  = now.getFullYear();
-
-    if (month >= 8 && month <= 11) return `1st Term ${year}/${year + 1}`;
-    if (month >= 0 && month <= 2)  return `2nd Term ${year - 1}/${year}`;
-    return `3rd Term ${year - 1}/${year}`;
+const currentTerm = async () => {
+    const settings = await SettingsModel.getSingleton();
+    const term = await settings.getCurrentTerm();
+    return term.name
 };
+
+const currentSession = async () => {
+    const settings = await SettingsModel.getSingleton();
+    const session = await settings.getCurrentSession();
+    return session.name
+};
+
 
 // ─── Status derivation ────────────────────────────────────────────────────────
 
@@ -53,8 +57,8 @@ const currentTerm = () => {
  */
 const deriveStatus = (paidPercent) => {
     if (paidPercent >= 100) return 'Paid';
-    if (paidPercent >= 25)  return 'Partial';
-    if (paidPercent > 0)    return 'Low';
+    if (paidPercent >= 25) return 'Partial';
+    if (paidPercent > 0) return 'Low';
     return 'Unpaid';
 };
 
@@ -66,11 +70,11 @@ const deriveStatus = (paidPercent) => {
  * @param {number} totalPaid
  */
 const recomputeFeeFields = (totalFee, totalPaid) => {
-    const safeFee    = Math.max(totalFee, 0);
-    const safePaid   = Math.max(totalPaid, 0);
-    const balance    = Math.max(safeFee - safePaid, 0);
+    const safeFee = Math.max(totalFee, 0);
+    const safePaid = Math.max(totalPaid, 0);
+    const balance = Math.max(safeFee - safePaid, 0);
     const paidPercent = safeFee > 0 ? Math.min(Math.round((safePaid / safeFee) * 100), 100) : 0;
-    const status      = deriveStatus(paidPercent);
+    const status = deriveStatus(paidPercent);
     return { balance, paidPercent, status };
 };
 
@@ -90,7 +94,7 @@ const generatePaymentId = async (studentId) => {
 
     const nextSerial = latest ? latest.serialNumber + 1 : 1;
     return {
-        paymentId:    `PAY-${studentId.toUpperCase()}-${nextSerial}`,
+        paymentId: `PAY-${studentId.toUpperCase()}-${nextSerial}`,
         serialNumber: nextSerial,
     };
 };
@@ -102,7 +106,7 @@ const generatePaymentId = async (studentId) => {
  * Format:  INV-YYYY-NNNN  e.g. INV-2025-1001
  */
 const generateInvoiceId = async () => {
-    const year   = new Date().getFullYear();
+    const year = new Date().getFullYear();
     const prefix = `INV-${year}-`;
 
     const latest = await Invoice.findOne(
@@ -110,15 +114,15 @@ const generateInvoiceId = async () => {
         { serialNumber: 1 }
     ).sort({ serialNumber: -1 });
 
-    const nextSerial   = latest ? latest.serialNumber + 1 : 1001;
+    const nextSerial = latest ? latest.serialNumber + 1 : 1001;
     const paddedSerial = String(nextSerial);
 
     return {
-        invoiceId:    `${prefix}${paddedSerial}`,
+        invoiceId: `${prefix}${paddedSerial}`,
         serialNumber: nextSerial,
     };
 };
- 
+
 /**
  * Builds the invoice line items for a student based on their class and
  * schooling option. Fee structure is configurable — in production this would
@@ -128,34 +132,29 @@ const generateInvoiceId = async () => {
  * @returns {{ lineItems: Array, totalFee: number }}
  */
 const buildFeeStructure = async (schoolingOption, className, termString) => {
+    console.log({ schoolingOption, className, termString })
     const Settings = require('../model/settings.model');
     const settings = await Settings.getSingleton();
-    const feeStructure = settings || {};
- 
+    const feeStructure = settings.feeStructure || {};
+
+
     const categoryKey = deriveFeeCategory(className, schoolingOption);
-    const termKey     = termSlotName(termString || currentTerm());
-    const category    = feeStructure[categoryKey];
- 
+    const termKey = termSlotName(termString || await currentTerm());
+    const category = feeStructure[categoryKey];
+
+    console.log(category[termKey])
+
     if (category && category[termKey] && category[termKey].items && category[termKey].items.length) {
         const lineItems = category[termKey].items.map((i) => ({
             description: i.description,
-            amount:      i.amount,
+            amount: i.amount,
         }));
         const totalFee = lineItems.reduce((sum, i) => sum + i.amount, 0);
         return { lineItems, totalFee };
     }
- 
-    // Fallback to hardcoded defaults if DB has no data
-    const isBoarding = (schoolingOption || '').toLowerCase() === 'boarding';
-    const lineItems = [
-        { description: 'School Fees',        amount: 181200 },
-        { description: 'Development Levy',   amount: 24160  },
-        { description: 'ICT / Computer',     amount: 6040   },
-        { description: 'Books & Stationery', amount: 30200  },
-        ...(isBoarding ? [{ description: 'Boarding (Feeding + Hostel)', amount: 60400 }] : []),
-    ];
-    const totalFee = lineItems.reduce((sum, i) => sum + i.amount, 0);
-    return { lineItems, totalFee };
+
+    return { lineItems: [], totalFee: 0 };
+
 };
 
 // ─── Due date helper ──────────────────────────────────────────────────────────
@@ -174,7 +173,7 @@ const computeDueDate = (issuedDate = new Date()) => {
 
 // ─── Lazy Student model loader ─────────────────────────────────────────────────
 
-const getStudent = () => require('../model/student');
+const getStudent = () => require('../model/student.model');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 2.1  GET /finance/summary
@@ -186,21 +185,21 @@ const getStudent = () => require('../model/student');
  * @param {object} query - { term? }
  */
 const getFinanceSummary = async ({ term } = {}) => {
-    const resolvedTerm = term || currentTerm();
+    const resolvedTerm = term || await currentTerm();
 
     // ── Aggregate FeeRecord totals ─────────────────────────────────────────
     const [agg] = await FeeRecord.aggregate([
         { $match: { term: resolvedTerm } },
         {
             $group: {
-                _id:              null,
-                totalExpected:    { $sum: '$totalFee'  },
-                totalCollected:   { $sum: '$totalPaid' },
-                total:            { $sum: 1 },
-                fullyPaid:        { $sum: { $cond: [{ $eq: ['$status', 'Paid']    }, 1, 0] } },
-                partial:          { $sum: { $cond: [{ $eq: ['$status', 'Partial'] }, 1, 0] } },
-                low:              { $sum: { $cond: [{ $eq: ['$status', 'Low']     }, 1, 0] } },
-                unpaid:           { $sum: { $cond: [{ $eq: ['$status', 'Unpaid']  }, 1, 0] } },
+                _id: null,
+                totalExpected: { $sum: '$totalFee' },
+                totalCollected: { $sum: '$totalPaid' },
+                total: { $sum: 1 },
+                fullyPaid: { $sum: { $cond: [{ $eq: ['$status', 'Paid'] }, 1, 0] } },
+                partial: { $sum: { $cond: [{ $eq: ['$status', 'Partial'] }, 1, 0] } },
+                low: { $sum: { $cond: [{ $eq: ['$status', 'Low'] }, 1, 0] } },
+                unpaid: { $sum: { $cond: [{ $eq: ['$status', 'Unpaid'] }, 1, 0] } },
             },
         },
     ]);
@@ -211,7 +210,7 @@ const getFinanceSummary = async ({ term } = {}) => {
     };
 
     const totalOutstanding = totals.totalExpected - totals.totalCollected;
-    const collectionRate   = totals.totalExpected > 0
+    const collectionRate = totals.totalExpected > 0
         ? Math.round((totals.totalCollected / totals.totalExpected) * 100)
         : 0;
 
@@ -223,8 +222,8 @@ const getFinanceSummary = async ({ term } = {}) => {
         { $match: { term: resolvedTerm } },
         {
             $group: {
-                _id:    '$method',
-                count:  { $sum: 1 },
+                _id: '$method',
+                count: { $sum: 1 },
                 amount: { $sum: '$amount' },
             },
         },
@@ -232,16 +231,16 @@ const getFinanceSummary = async ({ term } = {}) => {
 
     const paymentMethodBreakdown = {
         bankTransfer: { count: 0, amount: 0 },
-        pos:          { count: 0, amount: 0 },
-        cash:         { count: 0, amount: 0 },
-        online:       { count: 0, amount: 0 },
+        pos: { count: 0, amount: 0 },
+        cash: { count: 0, amount: 0 },
+        online: { count: 0, amount: 0 },
     };
 
     const methodKeyMap = {
         'Bank Transfer': 'bankTransfer',
-        'POS':           'pos',
-        'Cash':          'cash',
-        'Online':        'online',
+        'POS': 'pos',
+        'Cash': 'cash',
+        'Online': 'online',
     };
 
     for (const m of methodAgg) {
@@ -254,10 +253,10 @@ const getFinanceSummary = async ({ term } = {}) => {
         { $match: { term: resolvedTerm } },
         {
             $group: {
-                _id:         '$class',
-                expected:    { $sum: '$totalFee'  },
-                collected:   { $sum: '$totalPaid' },
-                students:    { $sum: 1 },
+                _id: '$class',
+                expected: { $sum: '$totalFee' },
+                collected: { $sum: '$totalPaid' },
+                students: { $sum: 1 },
                 unpaidCount: { $sum: { $cond: [{ $ne: ['$status', 'Paid'] }, 1, 0] } },
             },
         },
@@ -265,11 +264,11 @@ const getFinanceSummary = async ({ term } = {}) => {
     ]);
 
     const classSummary = classAgg.map((c) => ({
-        class:          c._id,
-        expected:       c.expected,
-        collected:      c.collected,
-        students:       c.students,
-        unpaidCount:    c.unpaidCount,
+        class: c._id,
+        expected: c.expected,
+        collected: c.collected,
+        students: c.students,
+        unpaidCount: c.unpaidCount,
         collectionRate: c.expected > 0
             ? Math.round((c.collected / c.expected) * 100)
             : 0,
@@ -282,29 +281,29 @@ const getFinanceSummary = async ({ term } = {}) => {
         .lean();
 
     return {
-        term:             resolvedTerm,
-        totalExpected:    totals.totalExpected,
-        totalCollected:   totals.totalCollected,
+        term: resolvedTerm,
+        totalExpected: totals.totalExpected,
+        totalCollected: totals.totalCollected,
         totalOutstanding,
         collectionRate,
         studentCounts: {
-            total:     totals.total,
+            total: totals.total,
             fullyPaid: totals.fullyPaid,
-            partial:   totals.partial,
-            unpaid:    totals.unpaid,
+            partial: totals.partial,
+            unpaid: totals.unpaid,
         },
         atRiskCount,
         paymentMethodBreakdown,
         classSummary,
         recentPayments: recentPayments.map((p) => ({
-            id:          p.paymentId,
-            studentId:   p.studentId,
+            id: p.paymentId,
+            studentId: p.studentId,
             studentName: p.studentName,
-            class:       p.class,
-            amount:      p.amount,
-            method:      p.method,
-            date:        p.date,
-            receivedBy:  p.receivedBy,
+            class: p.class,
+            amount: p.amount,
+            method: p.method,
+            date: p.date,
+            receivedBy: p.receivedBy,
         })),
     };
 };
@@ -329,21 +328,21 @@ const getAllFeeRecords = async ({
     paidPercentLessThan,
     term,
 } = {}) => {
-    const resolvedTerm = term || currentTerm();
-    const pageNum      = Math.max(parseInt(page,  10) || 1,  1);
-    const limitNum     = Math.min(parseInt(limit, 10) || 20, 100);
-    const skip         = (pageNum - 1) * limitNum;
+    const resolvedTerm = term || await currentTerm();
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(parseInt(limit, 10) || 20, 100);
+    const skip = (pageNum - 1) * limitNum;
 
     const filter = { term: resolvedTerm };
 
     if (search) {
         filter.$or = [
             { studentName: { $regex: search, $options: 'i' } },
-            { studentId:   { $regex: search, $options: 'i' } },
+            { studentId: { $regex: search, $options: 'i' } },
         ];
     }
-    if (cls)            filter.class    = { $regex: cls,            $options: 'i' };
-    if (status)         filter.status   = status;
+    if (cls) filter.class = { $regex: cls, $options: 'i' };
+    if (status) filter.status = status;
     if (schoolingOption) filter.schooling = schoolingOption;
     if (paidPercentLessThan !== undefined) {
         filter.paidPercent = { $lt: parseInt(paidPercentLessThan, 10) };
@@ -355,8 +354,8 @@ const getAllFeeRecords = async ({
     ]);
 
     // Attach payment history for each record
-    const recordIds    = records.map((r) => r._id);
-    const allPayments  = await Payment.find({ feeRecordId: { $in: recordIds } })
+    const recordIds = records.map((r) => r._id);
+    const allPayments = await Payment.find({ feeRecordId: { $in: recordIds } })
         .sort({ date: 1 })
         .lean();
 
@@ -365,13 +364,13 @@ const getAllFeeRecords = async ({
         const key = String(p.feeRecordId);
         if (!paymentsByRecord[key]) paymentsByRecord[key] = [];
         paymentsByRecord[key].push({
-            id:         p.paymentId,
-            amount:     p.amount,
-            method:     p.method,
-            date:       p.date,
-            reference:  p.reference,
+            id: p.paymentId,
+            amount: p.amount,
+            method: p.method,
+            date: p.date,
+            reference: p.reference,
             receivedBy: p.receivedBy,
-            term:       p.term,
+            term: p.term,
         });
     }
 
@@ -380,59 +379,59 @@ const getAllFeeRecords = async ({
         { $match: filter },
         {
             $group: {
-                _id:           null,
-                totalExpected: { $sum: '$totalFee'  },
-                totalCollected:{ $sum: '$totalPaid' },
-                total:         { $sum: 1 },
-                fullyPaid:     { $sum: { $cond: [{ $eq: ['$status', 'Paid']    }, 1, 0] } },
-                partial:       { $sum: { $cond: [{ $in: ['$status', ['Partial', 'Low']] }, 1, 0] } },
-                unpaid:        { $sum: { $cond: [{ $eq: ['$status', 'Unpaid']  }, 1, 0] } },
+                _id: null,
+                totalExpected: { $sum: '$totalFee' },
+                totalCollected: { $sum: '$totalPaid' },
+                total: { $sum: 1 },
+                fullyPaid: { $sum: { $cond: [{ $eq: ['$status', 'Paid'] }, 1, 0] } },
+                partial: { $sum: { $cond: [{ $in: ['$status', ['Partial', 'Low']] }, 1, 0] } },
+                unpaid: { $sum: { $cond: [{ $eq: ['$status', 'Unpaid'] }, 1, 0] } },
             },
         },
     ]);
 
     const summary = summaryAgg
         ? {
-              totalExpected:    summaryAgg.totalExpected,
-              totalCollected:   summaryAgg.totalCollected,
-              totalOutstanding: summaryAgg.totalExpected - summaryAgg.totalCollected,
-              collectionRate:   summaryAgg.totalExpected > 0
-                  ? Math.round((summaryAgg.totalCollected / summaryAgg.totalExpected) * 100)
-                  : 0,
-              total:     summaryAgg.total,
-              fullyPaid: summaryAgg.fullyPaid,
-              partial:   summaryAgg.partial,
-              unpaid:    summaryAgg.unpaid,
-          }
+            totalExpected: summaryAgg.totalExpected,
+            totalCollected: summaryAgg.totalCollected,
+            totalOutstanding: summaryAgg.totalExpected - summaryAgg.totalCollected,
+            collectionRate: summaryAgg.totalExpected > 0
+                ? Math.round((summaryAgg.totalCollected / summaryAgg.totalExpected) * 100)
+                : 0,
+            total: summaryAgg.total,
+            fullyPaid: summaryAgg.fullyPaid,
+            partial: summaryAgg.partial,
+            unpaid: summaryAgg.unpaid,
+        }
         : {
-              totalExpected: 0, totalCollected: 0,
-              totalOutstanding: 0, collectionRate: 0,
-              total: 0, fullyPaid: 0, partial: 0, unpaid: 0,
-          };
+            totalExpected: 0, totalCollected: 0,
+            totalOutstanding: 0, collectionRate: 0,
+            total: 0, fullyPaid: 0, partial: 0, unpaid: 0,
+        };
 
     const students = records.map((r) => ({
-        id:              r.studentId,
-        surname:         (r.studentName || '').split(' ')[0] || '',
-        firstName:       (r.studentName || '').split(' ').slice(1).join(' ') || '',
-        class:           r.class,
-        schooling:       r.schooling,
-        totalFee:        r.totalFee,
-        totalPaid:       r.totalPaid,
-        balance:         r.balance,
-        paidPercent:     r.paidPercent,
-        status:          r.status,
+        id: r.studentId,
+        surname: (r.studentName || '').split(' ')[0] || '',
+        firstName: (r.studentName || '').split(' ').slice(1).join(' ') || '',
+        class: r.class,
+        schooling: r.schooling,
+        totalFee: r.totalFee,
+        totalPaid: r.totalPaid,
+        balance: r.balance,
+        paidPercent: r.paidPercent,
+        status: r.status,
         lastPaymentDate: r.lastPaymentDate,
-        term:            r.term,
-        payments:        paymentsByRecord[String(r._id)] || [],
+        term: r.term,
+        payments: paymentsByRecord[String(r._id)] || [],
     }));
 
     return {
         students,
         summary,
         pagination: {
-            total:      total,
-            page:       pageNum,
-            limit:      limitNum,
+            total: total,
+            page: pageNum,
+            limit: limitNum,
             totalPages: Math.ceil(total / limitNum),
         },
     };
@@ -449,7 +448,7 @@ const getAllFeeRecords = async ({
  * @param {string} [term]
  */
 const getStudentFeeRecord = async (studentId, term) => {
-    const resolvedTerm = term || currentTerm();
+    const resolvedTerm = term || await currentTerm();
     const upperStudentId = studentId.toUpperCase();
 
     // Verify student exists
@@ -466,7 +465,7 @@ const getStudentFeeRecord = async (studentId, term) => {
     // Find or build an empty fee record
     let feeRecord = await FeeRecord.findOne({
         studentId: upperStudentId,
-        term:      resolvedTerm,
+        term: resolvedTerm,
     }).lean();
 
     const payments = feeRecord
@@ -475,39 +474,39 @@ const getStudentFeeRecord = async (studentId, term) => {
 
     return {
         student: {
-            id:        student.studentId,
-            surname:   student.surname,
+            id: student.studentId,
+            surname: student.surname,
             firstName: student.firstName,
-            class:     student.class,
+            class: student.class,
             schooling: student.schoolingOption,
         },
         feeRecord: feeRecord
             ? {
-                  term:            feeRecord.term,
-                  totalFee:        feeRecord.totalFee,
-                  totalPaid:       feeRecord.totalPaid,
-                  balance:         feeRecord.balance,
-                  paidPercent:     feeRecord.paidPercent,
-                  status:          feeRecord.status,
-                  payments: payments.map((p) => ({
-                      id:         p.paymentId,
-                      amount:     p.amount,
-                      method:     p.method,
-                      date:       p.date,
-                      reference:  p.reference,
-                      receivedBy: p.receivedBy,
-                      term:       p.term,
-                  })),
-              }
+                term: feeRecord.term,
+                totalFee: feeRecord.totalFee,
+                totalPaid: feeRecord.totalPaid,
+                balance: feeRecord.balance,
+                paidPercent: feeRecord.paidPercent,
+                status: feeRecord.status,
+                payments: payments.map((p) => ({
+                    id: p.paymentId,
+                    amount: p.amount,
+                    method: p.method,
+                    date: p.date,
+                    reference: p.reference,
+                    receivedBy: p.receivedBy,
+                    term: p.term,
+                })),
+            }
             : {
-                  term:        resolvedTerm,
-                  totalFee:    0,
-                  totalPaid:   0,
-                  balance:     0,
-                  paidPercent: 0,
-                  status:      'Unpaid',
-                  payments:    [],
-              },
+                term: resolvedTerm,
+                totalFee: 0,
+                totalPaid: 0,
+                balance: 0,
+                paidPercent: 0,
+                status: 'Unpaid',
+                payments: [],
+            },
     };
 };
 
@@ -533,8 +532,8 @@ const recordPayment = async (body, recordedBy) => {
         receivedBy,
     } = body;
 
-    const resolvedTerm    = term || currentTerm();
-    const upperStudentId  = studentId.toUpperCase();
+    const resolvedTerm = term || await currentTerm();
+    const upperStudentId = studentId.toUpperCase();
 
     // ── Verify student ─────────────────────────────────────────────────────
     const Student = getStudent();
@@ -554,26 +553,27 @@ const recordPayment = async (body, recordedBy) => {
     // ── Find or create FeeRecord ───────────────────────────────────────────
     let feeRecord = await FeeRecord.findOne({
         studentId: upperStudentId,
-        term:      resolvedTerm,
+        term: resolvedTerm,
     });
 
     if (!feeRecord) {
         // Create a new fee record using the school's fee structure
         const { lineItems, totalFee } = buildFeeStructure(student.schoolingOption);
-
-        feeRecord = await FeeRecord.create({
-            studentId:   upperStudentId,
-            studentName,
-            class:       student.class,
-            schooling:   student.schoolingOption,
-            term:        resolvedTerm,
-            totalFee,
-            totalPaid:   0,
-            balance:     totalFee,
-            paidPercent: 0,
-            status:      'Unpaid',
-            createdBy:   recordedBy,
-        });
+        totalFee > 0 ?
+            feeRecord = await FeeRecord.create({
+                studentId: upperStudentId,
+                studentName,
+                class: student.class,
+                schooling: student.schoolingOption,
+                term: resolvedTerm,
+                totalFee,
+                totalPaid: 0,
+                balance: totalFee,
+                paidPercent: 0,
+                status: 'Unpaid',
+                createdBy: recordedBy,
+            })
+            : null
     }
 
     // ── Guard: amount must not exceed outstanding balance ──────────────────
@@ -592,34 +592,34 @@ const recordPayment = async (body, recordedBy) => {
     const payment = await Payment.create({
         paymentId,
         serialNumber,
-        studentId:   upperStudentId,
+        studentId: upperStudentId,
         feeRecordId: feeRecord._id,
         studentName,
-        class:       student.class,
-        schooling:   student.schoolingOption,
+        class: student.class,
+        schooling: student.schoolingOption,
         amount,
         method,
-        reference:   reference || '',
-        date:        new Date(date),
-        term:        resolvedTerm,
-        receivedBy:  receivedBy || '',
+        reference: reference || '',
+        date: new Date(date),
+        term: resolvedTerm,
+        receivedBy: receivedBy || '',
         recordedBy,
     });
 
     // ── Update FeeRecord ───────────────────────────────────────────────────
     const newTotalPaid = feeRecord.totalPaid + amount;
-    const derived      = recomputeFeeFields(feeRecord.totalFee, newTotalPaid);
+    const derived = recomputeFeeFields(feeRecord.totalFee, newTotalPaid);
 
     await FeeRecord.findByIdAndUpdate(
         feeRecord._id,
         {
             $set: {
-                totalPaid:       newTotalPaid,
-                balance:         derived.balance,
-                paidPercent:     derived.paidPercent,
-                status:          derived.status,
+                totalPaid: newTotalPaid,
+                balance: derived.balance,
+                paidPercent: derived.paidPercent,
+                status: derived.status,
                 lastPaymentDate: new Date(date),
-                lastUpdatedBy:   recordedBy,
+                lastUpdatedBy: recordedBy,
             },
         },
         { new: true }
@@ -630,9 +630,9 @@ const recordPayment = async (body, recordedBy) => {
         { studentId: upperStudentId, term: resolvedTerm },
         {
             $set: {
-                amountPaid:    newTotalPaid,
-                balance:       derived.balance,
-                status:        derived.status === 'Low' ? 'Partial' : derived.status,
+                amountPaid: newTotalPaid,
+                balance: derived.balance,
+                status: derived.status === 'Low' ? 'Partial' : derived.status,
                 lastUpdatedBy: recordedBy,
             },
         }
@@ -640,22 +640,22 @@ const recordPayment = async (body, recordedBy) => {
 
     return {
         payment: {
-            id:          payment.paymentId,
-            studentId:   payment.studentId,
+            id: payment.paymentId,
+            studentId: payment.studentId,
             studentName: payment.studentName,
-            amount:      payment.amount,
-            method:      payment.method,
-            reference:   payment.reference,
-            date:        payment.date,
-            term:        payment.term,
-            receivedBy:  payment.receivedBy,
+            amount: payment.amount,
+            method: payment.method,
+            reference: payment.reference,
+            date: payment.date,
+            term: payment.term,
+            receivedBy: payment.receivedBy,
         },
         updatedFeeRecord: {
-            totalFee:    feeRecord.totalFee,
-            totalPaid:   newTotalPaid,
-            balance:     derived.balance,
+            totalFee: feeRecord.totalFee,
+            totalPaid: newTotalPaid,
+            balance: derived.balance,
             paidPercent: derived.paidPercent,
-            status:      derived.status,
+            status: derived.status,
         },
     };
 };
@@ -678,25 +678,25 @@ const getAllPayments = async ({
     dateTo,
     term,
 } = {}) => {
-    const resolvedTerm = term || currentTerm();
-    const pageNum      = Math.max(parseInt(page,  10) || 1,  1);
-    const limitNum     = Math.min(parseInt(limit, 10) || 20, 100);
-    const skip         = (pageNum - 1) * limitNum;
+    const resolvedTerm = term || await currentTerm();
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(parseInt(limit, 10) || 20, 100);
+    const skip = (pageNum - 1) * limitNum;
 
     const filter = { term: resolvedTerm };
 
     if (search) {
         filter.$or = [
             { studentName: { $regex: search, $options: 'i' } },
-            { studentId:   { $regex: search, $options: 'i' } },
-            { reference:   { $regex: search, $options: 'i' } },
+            { studentId: { $regex: search, $options: 'i' } },
+            { reference: { $regex: search, $options: 'i' } },
         ];
     }
-    if (method)   filter.method = method;
+    if (method) filter.method = method;
     if (dateFrom || dateTo) {
         filter.date = {};
         if (dateFrom) filter.date.$gte = new Date(dateFrom);
-        if (dateTo)   filter.date.$lte = new Date(dateTo);
+        if (dateTo) filter.date.$lte = new Date(dateTo);
     }
 
     const [payments, total] = await Promise.all([
@@ -712,26 +712,26 @@ const getAllPayments = async ({
 
     return {
         payments: payments.map((p) => ({
-            id:          p.paymentId,
-            studentId:   p.studentId,
+            id: p.paymentId,
+            studentId: p.studentId,
             studentName: p.studentName,
-            class:       p.class,
-            schooling:   p.schooling,
-            amount:      p.amount,
-            method:      p.method,
-            reference:   p.reference,
-            date:        p.date,
-            receivedBy:  p.receivedBy,
-            term:        p.term,
+            class: p.class,
+            schooling: p.schooling,
+            amount: p.amount,
+            method: p.method,
+            reference: p.reference,
+            date: p.date,
+            receivedBy: p.receivedBy,
+            term: p.term,
         })),
         totals: {
-            count:       totalAgg?.count       || 0,
+            count: totalAgg?.count || 0,
             totalAmount: totalAgg?.totalAmount || 0,
         },
         pagination: {
-            total:      total,
-            page:       pageNum,
-            limit:      limitNum,
+            total: total,
+            page: pageNum,
+            limit: limitNum,
             totalPages: Math.ceil(total / limitNum),
         },
     };
@@ -747,19 +747,20 @@ const getAllPayments = async ({
  * @param {object} query - { page, limit, search, status, term }
  */
 const getAllInvoices = async ({ page, limit, search, status, term } = {}) => {
-    const resolvedTerm = term || currentTerm();
-    const pageNum      = Math.max(parseInt(page,  10) || 1,  1);
-    const limitNum     = Math.min(parseInt(limit, 10) || 15, 100);
-    const skip         = (pageNum - 1) * limitNum;
+    console.log({ session: await currentSession(), term: await await currentTerm() })
+    const resolvedTerm = term || await currentTerm();
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(parseInt(limit, 10) || 15, 100);
+    const skip = (pageNum - 1) * limitNum;
 
     const filter = { term: resolvedTerm };
 
     if (search) {
         filter.$or = [
             { studentName: { $regex: search, $options: 'i' } },
-            { studentId:   { $regex: search, $options: 'i' } },
-            { invoiceId:   { $regex: search, $options: 'i' } },
-            { class:       { $regex: search, $options: 'i' } },
+            { studentId: { $regex: search, $options: 'i' } },
+            { invoiceId: { $regex: search, $options: 'i' } },
+            { class: { $regex: search, $options: 'i' } },
         ];
     }
     if (status) filter.status = status;
@@ -774,11 +775,11 @@ const getAllInvoices = async ({ page, limit, search, status, term } = {}) => {
         { $match: filter },
         {
             $group: {
-                _id:        null,
-                total:      { $sum: 1 },
-                paid:       { $sum: { $cond: [{ $eq: ['$status', 'Paid']    }, 1, 0] } },
-                partial:    { $sum: { $cond: [{ $eq: ['$status', 'Partial'] }, 1, 0] } },
-                unpaid:     { $sum: { $cond: [{ $eq: ['$status', 'Unpaid']  }, 1, 0] } },
+                _id: null,
+                total: { $sum: 1 },
+                paid: { $sum: { $cond: [{ $eq: ['$status', 'Paid'] }, 1, 0] } },
+                partial: { $sum: { $cond: [{ $eq: ['$status', 'Partial'] }, 1, 0] } },
+                unpaid: { $sum: { $cond: [{ $eq: ['$status', 'Unpaid'] }, 1, 0] } },
                 totalValue: { $sum: '$totalFee' },
             },
         },
@@ -786,35 +787,35 @@ const getAllInvoices = async ({ page, limit, search, status, term } = {}) => {
 
     const stats = statsAgg
         ? {
-              total:      statsAgg.total,
-              paid:       statsAgg.paid,
-              partial:    statsAgg.partial,
-              unpaid:     statsAgg.unpaid,
-              totalValue: statsAgg.totalValue,
-          }
+            total: statsAgg.total,
+            paid: statsAgg.paid,
+            partial: statsAgg.partial,
+            unpaid: statsAgg.unpaid,
+            totalValue: statsAgg.totalValue,
+        }
         : { total: 0, paid: 0, partial: 0, unpaid: 0, totalValue: 0 };
 
     return {
         invoices: invoices.map((inv) => ({
-            invoiceId:    inv.invoiceId,
-            studentId:    inv.studentId,
-            studentName:  inv.studentName,
-            class:        inv.class,
-            schooling:    inv.schooling,
-            term:         inv.term,
-            totalFee:     inv.totalFee,
-            amountPaid:   inv.amountPaid,
-            balance:      inv.balance,
-            status:       inv.status,
-            issuedDate:   inv.issuedDate,
-            dueDate:      inv.dueDate,
+            invoiceId: inv.invoiceId,
+            studentId: inv.studentId,
+            studentName: inv.studentName,
+            class: inv.class,
+            schooling: inv.schooling,
+            term: inv.term,
+            totalFee: inv.totalFee,
+            amountPaid: inv.amountPaid,
+            balance: inv.balance,
+            status: inv.status,
+            issuedDate: inv.issuedDate,
+            dueDate: inv.dueDate,
             sentToParent: inv.sentToParent,
         })),
         stats,
         pagination: {
-            total:      total,
-            page:       pageNum,
-            limit:      limitNum,
+            total: total,
+            page: pageNum,
+            limit: limitNum,
             totalPages: Math.ceil(total / limitNum),
         },
     };
@@ -845,25 +846,25 @@ const getInvoice = async (invoiceId) => {
 
     return {
         invoice: {
-            invoiceId:    invoice.invoiceId,
-            studentId:    invoice.studentId,
-            studentName:  invoice.studentName,
-            class:        invoice.class,
-            schooling:    invoice.schooling,
-            term:         invoice.term,
-            issuedDate:   invoice.issuedDate,
-            dueDate:      invoice.dueDate,
-            lineItems:    invoice.lineItems,
-            totalFee:     invoice.totalFee,
-            amountPaid:   invoice.amountPaid,
-            balance:      invoice.balance,
-            status:       invoice.status,
+            invoiceId: invoice.invoiceId,
+            studentId: invoice.studentId,
+            studentName: invoice.studentName,
+            class: invoice.class,
+            schooling: invoice.schooling,
+            term: invoice.term,
+            issuedDate: invoice.issuedDate,
+            dueDate: invoice.dueDate,
+            lineItems: invoice.lineItems,
+            totalFee: invoice.totalFee,
+            amountPaid: invoice.amountPaid,
+            balance: invoice.balance,
+            status: invoice.status,
             sentToParent: invoice.sentToParent,
             payments: payments.map((p) => ({
-                id:        p.paymentId,
-                amount:    p.amount,
-                method:    p.method,
-                date:      p.date,
+                id: p.paymentId,
+                amount: p.amount,
+                method: p.method,
+                date: p.date,
                 reference: p.reference,
             })),
         },
@@ -881,11 +882,11 @@ const getInvoice = async (invoiceId) => {
  * @param {object} body - { term, overwrite }
  * @param {string} generatedBy
  */
-const generateInvoices = async ({ term, overwrite }, generatedBy) => {
-    const resolvedTerm = term || currentTerm();
+const generateInvoices = async ({ term, session, overwrite }, generatedBy) => {
+    const resolvedTerm = term || await currentTerm();
 
     // Fetch all active students
-    const Student  = getStudent();
+    const Student = getStudent();
     const students = await Student.find(
         { status: 'Active' },
         { studentId: 1, surname: 1, firstName: 1, class: 1, schoolingOption: 1 }
@@ -900,7 +901,8 @@ const generateInvoices = async ({ term, overwrite }, generatedBy) => {
         // Check if invoice already exists
         const existing = await Invoice.findOne({
             studentId: student.studentId,
-            term:      resolvedTerm,
+            term: resolvedTerm,
+            session: session
         });
 
         if (existing && !overwrite) {
@@ -911,29 +913,33 @@ const generateInvoices = async ({ term, overwrite }, generatedBy) => {
         // Ensure FeeRecord exists
         let feeRecord = await FeeRecord.findOne({
             studentId: student.studentId,
-            term:      resolvedTerm,
+            term: resolvedTerm,
+            session: session
         });
 
-        const { lineItems, totalFee } = buildFeeStructure(student.schoolingOption);
+        const { lineItems, totalFee } = await buildFeeStructure(student.schoolingOption, student.class, resolvedTerm);
 
-        if (!feeRecord) {
+        console.log({ lineItems, totalFee })
+
+        if (!feeRecord && totalFee) {
             feeRecord = await FeeRecord.create({
-                studentId:   student.studentId,
+                studentId: student.studentId,
                 studentName,
-                class:       student.class,
-                schooling:   student.schoolingOption,
-                term:        resolvedTerm,
+                class: student.class,
+                schooling: student.schoolingOption,
+                term: resolvedTerm,
+                session,
                 totalFee,
-                totalPaid:   0,
-                balance:     totalFee,
+                totalPaid: 0,
+                balance: totalFee,
                 paidPercent: 0,
-                status:      'Unpaid',
-                createdBy:   generatedBy,
+                status: 'Unpaid',
+                createdBy: generatedBy,
             });
         }
 
         const issuedDate = new Date();
-        const dueDate    = computeDueDate(issuedDate);
+        const dueDate = computeDueDate(issuedDate);
         const { invoiceId, serialNumber } = await generateInvoiceId();
 
         if (existing && overwrite) {
@@ -942,33 +948,36 @@ const generateInvoices = async ({ term, overwrite }, generatedBy) => {
                 $set: {
                     lineItems,
                     totalFee,
-                    amountPaid:    feeRecord.totalPaid,
-                    balance:       feeRecord.balance,
-                    status:        feeRecord.status === 'Low' ? 'Partial' : feeRecord.status,
+                    amountPaid: feeRecord.totalPaid,
+                    balance: feeRecord.balance,
+                    status: feeRecord.status === 'Low' ? 'Partial' : feeRecord.status,
                     issuedDate,
                     dueDate,
                     lastUpdatedBy: generatedBy,
                 },
             });
         } else {
-            await Invoice.create({
-                invoiceId,
-                serialNumber,
-                studentId:   student.studentId,
-                feeRecordId: feeRecord._id,
-                studentName,
-                class:       student.class,
-                schooling:   student.schoolingOption,
-                term:        resolvedTerm,
-                issuedDate,
-                dueDate,
-                lineItems,
-                totalFee,
-                amountPaid:  feeRecord.totalPaid,
-                balance:     feeRecord.balance,
-                status:      feeRecord.status === 'Low' ? 'Partial' : feeRecord.status,
-                generatedBy,
-            });
+            if (totalFee) {
+                await Invoice.create({
+                    invoiceId,
+                    serialNumber,
+                    studentId: student.studentId,
+                    feeRecordId: feeRecord._id,
+                    studentName,
+                    class: student.class,
+                    schooling: student.schoolingOption,
+                    term: resolvedTerm,
+                    session,
+                    issuedDate,
+                    dueDate,
+                    lineItems,
+                    totalFee,
+                    amountPaid: feeRecord.totalPaid,
+                    balance: feeRecord.balance,
+                    status: feeRecord.status === 'Low' ? 'Partial' : feeRecord.status,
+                    generatedBy,
+                });
+            }
         }
 
         created++;
@@ -1026,7 +1035,7 @@ const sendInvoiceToParent = async (invoiceId) => {
 
     return {
         invoiceId: invoice.invoiceId,
-        sentTo:    student.contact.correspondenceEmail,
+        sentTo: student.contact.correspondenceEmail,
         sentAt,
     };
 };
@@ -1034,6 +1043,8 @@ const sendInvoiceToParent = async (invoiceId) => {
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
+    currentTerm,
+    currentSession,
     getFinanceSummary,
     getAllFeeRecords,
     getStudentFeeRecord,

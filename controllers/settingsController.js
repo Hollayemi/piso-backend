@@ -1,45 +1,25 @@
-/**
- * controllers/settingsController.js
- *
- * HTTP request/response handling for the Settings module (5.1 – 5.13).
- *
- * Each handler:
- *   1. Validates input with Joi (where input exists)
- *   2. Delegates to settingsService
- *   3. Sends a standardised response via sendSuccess
- *
- * No business logic or DB access lives here.
- *
- * Role access: ALL settings routes require super_admin.
- * This is enforced on the route layer, not here.
- *
- * Sub-sections:
- *   School Info    → 5.1 – 5.2
- *   Academic       → 5.3 – 5.7
- *   Notifications  → 5.8 – 5.9
- *   Security       → 5.10 – 5.13
- */
-
-const asyncHandler    = require('../middleware/asyncHandler');
-const ErrorResponse   = require('../utils/errorResponse');
+const asyncHandler = require('../middleware/asyncHandler');
+const ErrorResponse = require('../utils/errorResponse');
 const { sendSuccess } = require('../utils/sendResponse');
 const settingsService = require('../services/settingsService');
+const SettingsModel = require("../model/settings.model")
 
 const {
     validate,
     updateSchoolSchema,
-    updateSessionSchema,
     createTermSchema,
     updateTermSchema,
     updateNotificationsSchema,
     updateSecuritySchema,
+    createSessionSchema,
+    updateSessionSchema,
 } = require('../helpers/settingsValidations');
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 const extractJoiErrors = (joiError) =>
     joiError.details.map((d) => ({
-        field:   d.path.join('.'),
+        field: d.path.join('.'),
         message: d.message.replace(/['"]/g, ''),
     }));
 
@@ -85,8 +65,6 @@ exports.updateSchoolInfo = asyncHandler(async (req, res, next) => {
 // ACADEMIC SESSION & TERMS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ─── 5.3  GET /settings/academic ──────────────────────────────────────────────
-
 /**
  * @desc    Get academic session and all terms
  * @route   GET /api/v1/settings/academic
@@ -98,7 +76,6 @@ exports.getAcademicSettings = asyncHandler(async (req, res) => {
 });
 
 // ─── 5.4  PATCH /settings/academic/session ────────────────────────────────────
-
 /**
  * @desc    Update the current academic session year
  * @route   PATCH /api/v1/settings/academic/session
@@ -109,21 +86,108 @@ exports.updateAcademicSession = asyncHandler(async (req, res, next) => {
     if (error) {
         return next(new ErrorResponse('Validation failed', 400, extractJoiErrors(error)));
     }
-
     const result = await settingsService.updateAcademicSession(
         value.currentSession,
         req.user.id
     );
-
     sendSuccess(res, 200, 'Academic session updated', result);
 });
 
-// ─── 5.5  POST /settings/academic/terms ──────────────────────────────────────
+// ─── Session Controllers ─────────────────────────────────────────
 
 /**
- * @desc    Create a new term
- * @route   POST /api/v1/settings/academic/terms
- * @access  super_admin
+ * @desc    Create a new academic session
+ * @route   POST /api/settings/academic/sessions
+ * @access  Private/Admin
+ */
+exports.createSession = asyncHandler(async (req, res, next) => {
+    const { error, value } = validate(createSessionSchema, req.body);
+    if (error) {
+        return next(new ErrorResponse('Validation failed', 400, extractJoiErrors(error)));
+    }
+
+    const settings = await SettingsModel.getSingleton();
+    console.log({ settings })
+    const session = await settings.createSession(value);
+
+    sendSuccess(res, 201, 'Session created successfully', session);
+});
+
+/**
+ * @desc    Update an academic session
+ * @route   PUT /api/settings/academic/sessions/:id
+ * @access  Private/Admin
+ */
+exports.updateSession = asyncHandler(async (req, res, next) => {
+    const { error, value } = validate(updateSessionSchema, req.body);
+    if (error) {
+        return next(new ErrorResponse('Validation failed', 400, extractJoiErrors(error)));
+    }
+
+    const { id } = req.params;
+    const settings = await SettingsModel.getSingleton();
+    const session = await settings.updateSession(id, value);
+
+    sendSuccess(res, 200, 'Session updated successfully', session);
+});
+
+/**
+ * @desc    Delete an academic session
+ * @route   DELETE /api/settings/academic/sessions/:id
+ * @access  Private/Admin
+ */
+exports.deleteSession = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+
+    const settings = await SettingsModel.getSingleton();
+    await settings.deleteSession(id);
+
+    sendSuccess(res, 200, 'Session deleted successfully');
+});
+
+/**
+ * @desc    Set current session
+ * @route   PATCH /api/settings/academic/sessions/:id/current
+ * @access  Private/Admin
+ */
+exports.setCurrentSession = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+
+    const settings = await SettingsModel.getSingleton();
+    const session = await settings.setCurrentSession(id);
+
+    sendSuccess(res, 200, 'Current session updated successfully', session);
+});
+
+/**
+ * @desc    Get all sessions
+ * @route   GET /api/settings/academic/sessions
+ * @access  Private/Admin
+ */
+exports.getSessions = asyncHandler(async (req, res, next) => {
+    const settings = await SettingsModel.getSingleton();
+
+    sendSuccess(res, 200, 'Sessions retrieved successfully', settings.academic.sessions);
+});
+
+/**
+ * @desc    Get current session
+ * @route   GET /api/settings/academic/sessions/current
+ * @access  Private/Admin
+ */
+exports.getCurrentSession = asyncHandler(async (req, res, next) => {
+    const settings = await SettingsModel.getSingleton();
+    const session = settings.getCurrentSession();
+
+    sendSuccess(res, 200, 'Current session retrieved successfully', session);
+});
+
+// ─── Term Controllers ────────────────────────────────────────────
+
+/**
+ * @desc    Create a new term under a session
+ * @route   POST /api/settings/academic/sessions/:sessionId/terms
+ * @access  Private/Admin
  */
 exports.createTerm = asyncHandler(async (req, res, next) => {
     const { error, value } = validate(createTermSchema, req.body);
@@ -131,16 +195,17 @@ exports.createTerm = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse('Validation failed', 400, extractJoiErrors(error)));
     }
 
-    const result = await settingsService.createTerm(value, req.user.id);
-    sendSuccess(res, 201, 'Term created successfully', result);
+    const { sessionId } = req.params;
+    const settings = await SettingsModel.getSingleton();
+    const term = await settings.createTerm(sessionId, value);
+
+    sendSuccess(res, 201, 'Term created successfully', term);
 });
 
-// ─── 5.5  PUT /settings/academic/terms/:id ────────────────────────────────────
-
 /**
- * @desc    Update an existing term (partial)
- * @route   PUT /api/v1/settings/academic/terms/:id
- * @access  super_admin
+ * @desc    Update a term
+ * @route   PUT /api/settings/academic/terms/:id
+ * @access  Private/Admin
  */
 exports.updateTerm = asyncHandler(async (req, res, next) => {
     const { error, value } = validate(updateTermSchema, req.body);
@@ -148,32 +213,65 @@ exports.updateTerm = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse('Validation failed', 400, extractJoiErrors(error)));
     }
 
-    const result = await settingsService.updateTerm(req.params.id, value, req.user.id);
-    sendSuccess(res, 200, 'Term updated successfully', result);
+    const { id } = req.params;
+    const settings = await SettingsModel.getSingleton();
+    const term = await settings.updateTerm(id, value);
+
+    sendSuccess(res, 200, 'Term updated successfully', term);
 });
 
-// ─── 5.6  DELETE /settings/academic/terms/:id ────────────────────────────────
-
 /**
- * @desc    Delete a term (blocked if it is the current term)
- * @route   DELETE /api/v1/settings/academic/terms/:id
- * @access  super_admin
+ * @desc    Delete a term
+ * @route   DELETE /api/settings/academic/terms/:id
+ * @access  Private/Admin
  */
-exports.deleteTerm = asyncHandler(async (req, res) => {
-    await settingsService.deleteTerm(req.params.id, req.user.id);
+exports.deleteTerm = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+
+    const settings = await SettingsModel.getSingleton();
+    await settings.deleteTerm(id);
+
     sendSuccess(res, 200, 'Term deleted successfully');
 });
 
-// ─── 5.7  PATCH /settings/academic/terms/:id/set-current ─────────────────────
+/**
+ * @desc    Set current term
+ * @route   PATCH /api/settings/academic/terms/:id/current
+ * @access  Private/Admin
+ */
+exports.setCurrentTerm = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+
+    const settings = await SettingsModel.getSingleton();
+    const term = await settings.setCurrentTerm(id);
+
+    sendSuccess(res, 200, 'Current term updated successfully', term);
+});
 
 /**
- * @desc    Mark a term as the active current term
- * @route   PATCH /api/v1/settings/academic/terms/:id/set-current
- * @access  super_admin
+ * @desc    Get all terms for a session
+ * @route   GET /api/settings/academic/sessions/:sessionId/terms
+ * @access  Private/Admin
  */
-exports.setCurrentTerm = asyncHandler(async (req, res) => {
-    const result = await settingsService.setCurrentTerm(req.params.id, req.user.id);
-    sendSuccess(res, 200, 'Current term updated', result);
+exports.getTermsBySession = asyncHandler(async (req, res, next) => {
+    const { sessionId } = req.params;
+
+    const settings = await SettingsModel.getSingleton();
+    const terms = settings.getTermsBySession(sessionId);
+
+    sendSuccess(res, 200, 'Terms retrieved successfully', terms);
+});
+
+/**
+ * @desc    Get current term
+ * @route   GET /api/settings/academic/terms/current
+ * @access  Private/Admin
+ */
+exports.getCurrentTerm = asyncHandler(async (req, res, next) => {
+    const settings = await SettingsModel.getSingleton();
+    const term = settings.getCurrentTerm();
+
+    sendSuccess(res, 200, 'Current term retrieved successfully', term);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -277,7 +375,7 @@ exports.getFeeStructure = asyncHandler(async (req, res) => {
     const result = await settingsService.getFeeStructure();
     sendSuccess(res, 200, '', result);
 });
- 
+
 // ─── PUT /settings/fees ───────────────────────────────────────────────────────
 exports.updateFeeStructure = asyncHandler(async (req, res, next) => {
     const result = await settingsService.updateFeeStructure(req.body, req.user.id);

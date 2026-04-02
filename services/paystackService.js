@@ -389,6 +389,8 @@ const initiatePayment = async (body, parent) => {
  * @param {string} parentId  - From req.parent.parentId
  */
 const verifyPayment = async (reference, parentId) => {
+
+    console.log({reference, parentId})
     // Load our record
     const paystackDoc = await PaystackPayment.findOne({ reference });
 

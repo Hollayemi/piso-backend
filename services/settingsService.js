@@ -134,13 +134,7 @@ const getAcademicSettings = async () => {
     return {
         currentSession: academic.currentSession || '',
         currentTerm:    academic.currentTerm    || '',
-        terms: (academic.terms || []).map((t) => ({
-            id:      t.id,
-            name:    t.name,
-            start:   t.start,
-            end:     t.end,
-            current: t.current,
-        })),
+        sessions: academic.sessions || [],
     };
 };
 
@@ -154,7 +148,6 @@ const getAcademicSettings = async () => {
  */
 const updateAcademicSession = async (currentSession, updatedBy) => {
     const settings = await Settings.getSingleton();
-
     settings.academic.currentSession = currentSession;
     settings.lastUpdatedBy = updatedBy;
     settings.markModified('academic');
@@ -498,8 +491,8 @@ const clearAllSessions = async (updatedBy) => {
 const termSlotName = (termString) => {
     if (!termString) return 'firstTerm';
     const t = termString.trim();
-    if (t.startsWith('2nd')) return 'secondTerm';
-    if (t.startsWith('3rd')) return 'thirdTerm';
+    if (t.startsWith('2nd') || t.toLowerCase().startsWith("second")) return 'secondTerm';
+    if (t.startsWith('3rd') || t.toLowerCase().startsWith("third")) return 'thirdTerm';
     return 'firstTerm';
 };
  
@@ -532,8 +525,9 @@ const getFeeStructure = async () => {
     let needsSave = false;
  
     for (const cat of CATS) {
+        console.log({cat})
         if (!fs[cat] || !fs[cat].firstTerm || !fs[cat].firstTerm.items || !fs[cat].firstTerm.items.length) {
-            fs[cat] = DEFAULT_FEE_STRUCTURE[cat];
+            fs[cat] = DEFAULT_FEE_STRUCTURE?.[cat];
             needsSave = true;
         }
     }

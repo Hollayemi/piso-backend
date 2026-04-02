@@ -49,10 +49,6 @@ const {
     updateSchoolInfo,
     getAcademicSettings,
     updateAcademicSession,
-    createTerm,
-    updateTerm,
-    deleteTerm,
-    setCurrentTerm,
     getNotificationSettings,
     updateNotificationSettings,
     getSecuritySettings,
@@ -60,10 +56,27 @@ const {
     forcePasswordReset,
     clearAllSessions,
     getFeeStructure,
-    updateFeeStructure
+    updateFeeStructure,
+    createSession,
+    updateSession,
+    deleteSession,
+    setCurrentSession,
+    getSessions,
+    getCurrentSession,
+    createTerm,
+    updateTerm,
+    deleteTerm,
+    setCurrentTerm,
+    getTermsBySession,
+    getCurrentTerm,
 } = require('../controllers/settingsController');
 
 // ─── Apply JWT + super_admin guard to every route ────────────────────────────
+
+
+// GET /academic — full session + terms list
+router.get('/academic', getAcademicSettings);
+
 
 router.use(protect);
 router.use(authorize(ROLES.SUPER_ADMIN));
@@ -77,31 +90,37 @@ router
     .get(getSchoolInfo)
     .put(updateSchoolInfo);
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ACADEMIC  —  /settings/academic
-// ═══════════════════════════════════════════════════════════════════════════════
 
-// GET /academic — full session + terms list
-router.get('/academic', getAcademicSettings);
+// ─── Session Routes ─────────────────────────────────────────────
+router.route('/academic/session')
+    .get(getSessions)
+    .post(createSession);
 
-// PATCH /academic/session — update session string
-// ⚠️  Declared BEFORE /academic/terms to avoid route confusion
-router.patch('/academic/session', updateAcademicSession);
+router.route('/academic/sessions/current')
+    .get(getCurrentSession);
 
-// POST /academic/terms — create new term
-router.post('/academic/terms', createTerm);
+router.route('/academic/sessions/:id')
+    .put(updateSession)
+    .delete(deleteSession);
 
-// PATCH /academic/terms/:id/set-current — mark a term as current
-// ⚠️  Declared BEFORE /academic/terms/:id to prevent Express matching
-//     "set-current" as a second :id segment in a chained route
-router.patch('/academic/terms/:id/set-current', setCurrentTerm);
+router.route('/academic/sessions/:id/set-current')
+    .patch(setCurrentSession);
 
-// PUT    /academic/terms/:id — update a term
-// DELETE /academic/terms/:id — delete a term
-router
-    .route('/academic/terms/:id')
+// ─── Term Routes ────────────────────────────────────────────────
+router.route('/academic/sessions/:sessionId/terms')
+    .get(getTermsBySession)
+    .post(createTerm);
+
+router.route('/academic/terms/current')
+    .get(getCurrentTerm);
+
+router.route('/academic/terms/:id')
     .put(updateTerm)
     .delete(deleteTerm);
+
+router.route('/academic/terms/:id/set-current')
+    .patch(setCurrentTerm);
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // NOTIFICATIONS  —  /settings/notifications

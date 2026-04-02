@@ -109,6 +109,9 @@ const generateInvoicesSchema = Joi.object({
     term: Joi.string().trim().required().messages({
         'any.required': 'term is required',
     }),
+    session: Joi.string().trim().required().messages({
+        'any.required': 'session is required',
+    }),
     overwrite: Joi.boolean().default(false).optional(),
 });
 
