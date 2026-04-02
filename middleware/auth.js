@@ -65,8 +65,6 @@ const protect = async (req, res, next) => {
         // Verify signature and expiry
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        console.log({ decoded })
-
         // ── Session version check ──────────────────────────────────────────
         const settings = await Settings.getSingleton();
         const currentVersion = settings.security?.sessionVersion ?? 1;

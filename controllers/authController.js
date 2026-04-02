@@ -65,7 +65,6 @@ exports.logout = asyncHandler(async (req, res) => {
 
 
 exports.getProfile = asyncHandler(async (req, res) => {
-    console.log("getProfile called for user:", req.user);
     let result;
     if (req.user.role === "parent") {
         result = await parentService.getProfile(req.user.id);
