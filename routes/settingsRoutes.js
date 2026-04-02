@@ -59,6 +59,8 @@ const {
     updateSecuritySettings,
     forcePasswordReset,
     clearAllSessions,
+    getFeeStructure,
+    updateFeeStructure
 } = require('../controllers/settingsController');
 
 // ─── Apply JWT + super_admin guard to every route ────────────────────────────
@@ -130,4 +132,10 @@ router
     .get(getSecuritySettings)
     .put(updateSecuritySettings);
 
+
+// GET /fees  |  PUT /fees
+router
+    .route('/fees')
+    .get(getFeeStructure)
+    .put(updateFeeStructure);
 module.exports = router;

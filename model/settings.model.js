@@ -1,32 +1,4 @@
-/**
- * settings.model.js
- *
- * Singleton document — exactly ONE record ever lives in this collection,
- * identified by the fixed _key = 'PISO_SETTINGS'.
- * Use Settings.getSingleton() to safely fetch-or-create it.
- *
- * Sub-documents:
- *   school        → API 5.1 – 5.2  (school information + logo)
- *   academic      → API 5.3 – 5.7  (session string + terms array)
- *   notifications → API 5.8 – 5.9  (notification toggles + sender config)
- *   security      → API 5.10 – 5.13 (password policy + session control)
- *
- * Session invalidation strategy (5.13):
- *   `security.sessionVersion` is a monotonically-increasing integer.
- *   Every JWT is issued with the current version embedded.
- *   POST /settings/security/clear-sessions increments this value,
- *   instantly invalidating every previously-issued token.
- *
- * Force password-reset strategy (5.12):
- *   Staff.mustResetPassword is set to true on all staff documents.
- *   The protect middleware returns 403 when this flag is set,
- *   except on the PUT /auth/change-password route.
- */
-
 const mongoose = require('mongoose');
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const SINGLETON_KEY = 'PISO_SETTINGS';
 
 const NOTIFICATION_IDS = [
@@ -118,14 +90,45 @@ const SecuritySchema = new mongoose.Schema(
         passwordMinLength:     { type: Number,  default: 8, min: 6, max: 32 },
         requireUppercase:      { type: Boolean, default: true },
         requireNumbers:        { type: Boolean, default: true },
-        /**
-         * Monotonically-increasing counter.
-         * Incrementing this value invalidates ALL active JWT tokens because
-         * every token embeds the version at the time of issuance.
-         * The `protect` middleware rejects tokens whose embedded version
-         * is lower than the current stored value.
-         */
         sessionVersion: { type: Number, default: 1 },
+    },
+    { _id: false }
+);
+
+
+const FeeLineItemSchema = new mongoose.Schema(
+    {
+        description: { type: String, required: true, trim: true },
+        amount:      { type: Number, required: true, min: 0 },
+    },
+    { _id: false }
+);
+ 
+const FeeTermSchema = new mongoose.Schema(
+    {
+        items: { type: [FeeLineItemSchema], default: [] },
+    },
+    { _id: false }
+);
+ 
+const FeeCategorySchema = new mongoose.Schema(
+    {
+        label:      { type: String, trim: true, default: '' },
+        firstTerm:  { type: FeeTermSchema, default: () => ({ items: [] }) },
+        secondTerm: { type: FeeTermSchema, default: () => ({ items: [] }) },
+        thirdTerm:  { type: FeeTermSchema, default: () => ({ items: [] }) },
+    },
+    { _id: false }
+);
+ 
+const FeeStructureSchema = new mongoose.Schema(
+    {
+        primaryDay:      { type: FeeCategorySchema, default: () => ({}) },
+        primaryBoarders: { type: FeeCategorySchema, default: () => ({}) },
+        juniorDay:       { type: FeeCategorySchema, default: () => ({}) },
+        juniorBoarders:  { type: FeeCategorySchema, default: () => ({}) },
+        seniorDay:       { type: FeeCategorySchema, default: () => ({}) },
+        seniorBoarders:  { type: FeeCategorySchema, default: () => ({}) },
     },
     { _id: false }
 );
@@ -145,6 +148,7 @@ const SettingsSchema = new mongoose.Schema(
         academic:      { type: AcademicSchema,      default: () => ({}) },
         notifications: { type: NotificationsSchema, default: () => ({}) },
         security:      { type: SecuritySchema,       default: () => ({}) },
+        feeStructure: { type: FeeStructureSchema, default: () => ({}) },
 
         lastUpdatedBy: { type: String, default: '' },
     },
@@ -187,3 +191,45 @@ module.exports.SINGLETON_KEY          = SINGLETON_KEY;
 module.exports.NOTIFICATION_IDS       = NOTIFICATION_IDS;
 module.exports.NOTIFICATION_LABELS    = NOTIFICATION_LABELS;
 module.exports.VALID_SESSION_TIMEOUTS = VALID_SESSION_TIMEOUTS;
+
+const DEFAULT_FEE_STRUCTURE = {
+    primaryDay: {
+        label: 'Primary (Day)',
+        firstTerm:  { items: [{ description: 'Tuition', amount: 120000 }, { description: 'Uniform & Shoes', amount: 26000 }, { description: 'Books & Stationery', amount: 30000 }, { description: 'Development Levy', amount: 3000 }, { description: 'Computer Levy', amount: 500 }, { description: 'Sport Wears', amount: 14000 }, { description: 'Other Levies', amount: 12500 }] },
+        secondTerm: { items: [{ description: 'Tuition', amount: 120000 }, { description: 'Health Levy', amount: 1000 }, { description: 'Exam Fees', amount: 2000 }] },
+        thirdTerm:  { items: [{ description: 'Tuition', amount: 120000 }, { description: 'Health Levy', amount: 1000 }, { description: 'Exam Fees', amount: 2000 }, { description: 'End of Session', amount: 8000 }] },
+    },
+    primaryBoarders: {
+        label: 'Primary (Boarders)',
+        firstTerm:  { items: [{ description: 'Tuition', amount: 185000 }, { description: 'Uniform', amount: 15000 }, { description: 'Shoes', amount: 10000 }, { description: 'Examination', amount: 1000 }, { description: 'Computer', amount: 500 }, { description: 'Development Levy', amount: 3000 }, { description: 'Chair Levy', amount: 2000 }, { description: 'Science Levy', amount: 500 }, { description: 'Coaching', amount: 3000 }, { description: 'Cardigan', amount: 7000 }, { description: 'Student File', amount: 500 }, { description: 'Report Sheet', amount: 1000 }, { description: 'Health & Laundry', amount: 6000 }, { description: 'Exercise Books', amount: 6000 }, { description: 'Sport Wears', amount: 14000 }, { description: 'Hostel Wears', amount: 24000 }, { description: 'Social Wears', amount: 25000 }, { description: 'End of Session', amount: 8000 }, { description: 'Textbooks', amount: 30000 }] },
+        secondTerm: { items: [{ description: 'Tuition', amount: 260500 }, { description: 'Health & Laundry', amount: 6000 }, { description: 'Exercise Books', amount: 6000 }, { description: 'Exam Fees', amount: 1000 }, { description: 'Coaching', amount: 3000 }, { description: 'Miscellaneous', amount: 1500 }] },
+        thirdTerm:  { items: [{ description: 'Tuition', amount: 260500 }, { description: 'Health & Laundry', amount: 6000 }, { description: 'Exercise Books', amount: 6000 }, { description: 'Exam Fees', amount: 1000 }, { description: 'Coaching', amount: 3000 }, { description: 'End of Session', amount: 8000 }, { description: 'Miscellaneous', amount: 1500 }] },
+    },
+    juniorDay: {
+        label: 'Junior Secondary (Day)',
+        firstTerm:  { items: [{ description: 'Tuition', amount: 50000 }, { description: 'Uniform', amount: 20000 }, { description: 'Shoes', amount: 11000 }, { description: 'Computer Levy', amount: 3000 }, { description: 'Skill Acquisition', amount: 3000 }, { description: 'Development Levy', amount: 6000 }, { description: 'Chair Levy', amount: 2000 }, { description: 'Science Levy', amount: 1000 }, { description: 'Coaching', amount: 4000 }, { description: 'Identity Card', amount: 2000 }, { description: 'Cardigan', amount: 7000 }, { description: 'Student File', amount: 1000 }, { description: 'Report Sheet', amount: 1000 }, { description: 'Health Levy', amount: 1000 }, { description: 'Exercise Books', amount: 10000 }, { description: 'Sport Wears', amount: 14000 }, { description: 'Textbooks', amount: 50000 }] },
+        secondTerm: { items: [{ description: 'Tuition', amount: 142000 }, { description: 'Health Levy', amount: 1000 }, { description: 'Exercise Books', amount: 5000 }, { description: 'Exam Fees', amount: 2000 }, { description: 'Anniversary', amount: 4000 }, { description: 'Coaching', amount: 4000 }, { description: 'Miscellaneous', amount: 13000 }] },
+        thirdTerm:  { items: [{ description: 'Tuition', amount: 142000 }, { description: 'Health Levy', amount: 1000 }, { description: 'Exercise Books', amount: 5000 }, { description: 'Exam Fees', amount: 2000 }, { description: 'End of Session', amount: 8000 }, { description: 'Coaching', amount: 4000 }, { description: 'Miscellaneous', amount: 17000 }] },
+    },
+    juniorBoarders: {
+        label: 'Junior Secondary (Boarders)',
+        firstTerm:  { items: [{ description: 'Tuition', amount: 215000 }, { description: 'Uniform', amount: 20000 }, { description: 'Shoes', amount: 11000 }, { description: 'Computer Levy', amount: 3000 }, { description: 'Skill Acquisition', amount: 3000 }, { description: 'Development Levy', amount: 3000 }, { description: 'Chair Levy', amount: 2000 }, { description: 'Science Levy', amount: 1000 }, { description: 'Coaching', amount: 3000 }, { description: 'Identity Card', amount: 2000 }, { description: 'Cardigan', amount: 7000 }, { description: 'Student File', amount: 1000 }, { description: 'Report Sheet', amount: 1000 }, { description: 'Health & Laundry', amount: 6000 }, { description: 'Exercise Books', amount: 11000 }, { description: 'Sport Wears', amount: 14000 }, { description: 'Hostel Wears', amount: 16000 }, { description: 'Church Wears', amount: 25000 }, { description: 'Anniversary', amount: 4000 }, { description: 'Textbooks', amount: 50000 }] },
+        secondTerm: { items: [{ description: 'Tuition', amount: 273000 }, { description: 'Health & Laundry', amount: 6000 }, { description: 'Exercise Books', amount: 6000 }, { description: 'Exam Fees', amount: 2000 }, { description: 'Coaching', amount: 3000 }, { description: 'End of Session', amount: 8000 }, { description: 'Miscellaneous', amount: 4000 }] },
+        thirdTerm:  { items: [{ description: 'Tuition', amount: 273000 }, { description: 'Health & Laundry', amount: 6000 }, { description: 'Exercise Books', amount: 6000 }, { description: 'Exam Fees', amount: 2000 }, { description: 'Coaching', amount: 3000 }, { description: 'End of Session', amount: 8000 }, { description: 'Miscellaneous', amount: 12000 }] },
+    },
+    seniorDay: {
+        label: 'Senior Secondary (Day)',
+        firstTerm:  { items: [{ description: 'Tuition', amount: 50000 }, { description: 'Uniform', amount: 22000 }, { description: 'Shoes', amount: 11000 }, { description: 'Computer Levy', amount: 3000 }, { description: 'Skill Acquisition', amount: 3000 }, { description: 'Development Levy', amount: 6000 }, { description: 'Chair Levy', amount: 2000 }, { description: 'Science Levy', amount: 2000 }, { description: 'Coaching', amount: 3000 }, { description: 'Identity Card', amount: 2000 }, { description: 'Cardigan', amount: 7000 }, { description: 'Student File', amount: 1000 }, { description: 'Report Sheet', amount: 1000 }, { description: 'Health Levy', amount: 1000 }, { description: 'Exercise Books', amount: 11000 }, { description: 'Sport Wears', amount: 14000 }, { description: 'Textbooks', amount: 50000 }] },
+        secondTerm: { items: [{ description: 'Tuition', amount: 148000 }, { description: 'Health Levy', amount: 1000 }, { description: 'Exercise Books', amount: 5000 }, { description: 'Exam Fees', amount: 2000 }, { description: 'Anniversary', amount: 4000 }, { description: 'Coaching', amount: 3000 }, { description: 'Miscellaneous', amount: 13000 }] },
+        thirdTerm:  { items: [{ description: 'Tuition', amount: 148000 }, { description: 'Health Levy', amount: 1000 }, { description: 'Exercise Books', amount: 5000 }, { description: 'Exam Fees', amount: 2000 }, { description: 'End of Session', amount: 8000 }, { description: 'Coaching', amount: 3000 }, { description: 'Miscellaneous', amount: 16000 }] },
+    },
+    seniorBoarders: {
+        label: 'Senior Secondary (Boarders)',
+        firstTerm:  { items: [{ description: 'Tuition', amount: 219000 }, { description: 'Uniform', amount: 20000 }, { description: 'Shoes', amount: 11000 }, { description: 'Computer Levy', amount: 3000 }, { description: 'Skill Acquisition', amount: 3000 }, { description: 'Development Levy', amount: 3000 }, { description: 'Chair Levy', amount: 2000 }, { description: 'Science Levy', amount: 2000 }, { description: 'Coaching', amount: 3000 }, { description: 'Identity Card', amount: 2000 }, { description: 'Cardigan', amount: 7000 }, { description: 'Student File', amount: 1000 }, { description: 'Report Sheet', amount: 1000 }, { description: 'Health & Laundry', amount: 6000 }, { description: 'Exercise Books', amount: 11000 }, { description: 'Sport Wears', amount: 14000 }, { description: 'Hostel Wears', amount: 20000 }, { description: 'Church Wears', amount: 25000 }, { description: 'Anniversary', amount: 4000 }, { description: 'Textbooks', amount: 50000 }] },
+        secondTerm: { items: [{ description: 'Tuition', amount: 277000 }, { description: 'Health & Laundry', amount: 6000 }, { description: 'Exercise Books', amount: 6000 }, { description: 'Exam Fees', amount: 2000 }, { description: 'Coaching', amount: 3000 }, { description: 'End of Session', amount: 8000 }, { description: 'Miscellaneous', amount: 5000 }] },
+        thirdTerm:  { items: [{ description: 'Tuition', amount: 277000 }, { description: 'Health & Laundry', amount: 6000 }, { description: 'Exercise Books', amount: 6000 }, { description: 'Exam Fees', amount: 2000 }, { description: 'Coaching', amount: 3000 }, { description: 'End of Session', amount: 8000 }, { description: 'Miscellaneous', amount: 13000 }] },
+    },
+};
+
+
+module.exports.DEFAULT_FEE_STRUCTURE = DEFAULT_FEE_STRUCTURE

@@ -31,6 +31,7 @@ const ErrorResponse = require('../utils/errorResponse');
 const {
     NOTIFICATION_IDS,
     NOTIFICATION_LABELS,
+    DEFAULT_FEE_STRUCTURE,
 } = require('../model/settings.model');
 
 // ─── File upload helper ───────────────────────────────────────────────────────
@@ -492,6 +493,88 @@ const clearAllSessions = async (updatedBy) => {
     return { sessionsCleared };
 };
 
+
+// ─── Helper: resolve term slot name ──────────────────────────────────────────
+const termSlotName = (termString) => {
+    if (!termString) return 'firstTerm';
+    const t = termString.trim();
+    if (t.startsWith('2nd')) return 'secondTerm';
+    if (t.startsWith('3rd')) return 'thirdTerm';
+    return 'firstTerm';
+};
+ 
+// ─── Helper: derive fee category key from class + schooling ──────────────────
+const deriveFeeCategory = (className = '', schoolingOption = '') => {
+    const upper     = className.trim().toUpperCase();
+    const isBoarding = (schoolingOption || '').toLowerCase() === 'boarding';
+ 
+    if (upper.startsWith('JSS') || upper.startsWith('JS ') || upper.includes('JUNIOR')) {
+        return isBoarding ? 'juniorBoarders' : 'juniorDay';
+    }
+    if (upper.startsWith('SS') || upper.startsWith('S.S') || upper.includes('SENIOR')) {
+        return isBoarding ? 'seniorBoarders' : 'seniorDay';
+    }
+    // Primary / KG / Nursery
+    return isBoarding ? 'primaryBoarders' : 'primaryDay';
+};
+ 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GET /settings/fees
+// ═══════════════════════════════════════════════════════════════════════════
+ 
+const getFeeStructure = async () => {
+    const settings = await Settings.getSingleton();
+ 
+    // Seed defaults if feeStructure is empty
+    const fs = settings.feeStructure || {};
+    const CATS = ['primaryDay', 'primaryBoarders', 'juniorDay', 'juniorBoarders', 'seniorDay', 'seniorBoarders'];
+    let needsSave = false;
+ 
+    for (const cat of CATS) {
+        if (!fs[cat] || !fs[cat].firstTerm || !fs[cat].firstTerm.items || !fs[cat].firstTerm.items.length) {
+            fs[cat] = DEFAULT_FEE_STRUCTURE[cat];
+            needsSave = true;
+        }
+    }
+ 
+    if (needsSave) {
+        settings.feeStructure = fs;
+        settings.markModified('feeStructure');
+        await settings.save();
+    }
+ 
+    return { feeStructure: settings.feeStructure };
+};
+ 
+// ═══════════════════════════════════════════════════════════════════════
+// PUT /settings/fees
+// ═══════════════════════════════════════════════════════════════════════
+ 
+const updateFeeStructure = async (body, updatedBy) => {
+    const settings = await Settings.getSingleton();
+ 
+    if (body.feeStructure) {
+        settings.feeStructure = body.feeStructure;
+    } else {
+        // Update a single category
+        const { category, firstTerm, secondTerm, thirdTerm, label } = body;
+        if (!settings.feeStructure) settings.feeStructure = {};
+        if (!settings.feeStructure[category]) settings.feeStructure[category] = {};
+ 
+        if (label !== undefined)      settings.feeStructure[category].label      = label;
+        if (firstTerm !== undefined)  settings.feeStructure[category].firstTerm  = firstTerm;
+        if (secondTerm !== undefined) settings.feeStructure[category].secondTerm = secondTerm;
+        if (thirdTerm !== undefined)  settings.feeStructure[category].thirdTerm  = thirdTerm;
+    }
+ 
+    settings.lastUpdatedBy = updatedBy;
+    settings.markModified('feeStructure');
+    await settings.save();
+ 
+    return { feeStructure: settings.feeStructure };
+};
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -509,4 +592,10 @@ module.exports = {
     updateSecuritySettings,
     forcePasswordReset,
     clearAllSessions,
+
+    getFeeStructure,
+    updateFeeStructure,
+    deriveFeeCategory,
+    termSlotName
+
 };

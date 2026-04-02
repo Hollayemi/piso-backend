@@ -270,3 +270,16 @@ exports.clearAllSessions = asyncHandler(async (req, res) => {
     const result = await settingsService.clearAllSessions(req.user.id);
     sendSuccess(res, 200, 'All active sessions cleared', result);
 });
+
+
+// ─── GET /settings/fees ───────────────────────────────────────────────────────
+exports.getFeeStructure = asyncHandler(async (req, res) => {
+    const result = await settingsService.getFeeStructure();
+    sendSuccess(res, 200, '', result);
+});
+ 
+// ─── PUT /settings/fees ───────────────────────────────────────────────────────
+exports.updateFeeStructure = asyncHandler(async (req, res, next) => {
+    const result = await settingsService.updateFeeStructure(req.body, req.user.id);
+    sendSuccess(res, 200, 'Fee structure updated successfully', result);
+});

@@ -35,6 +35,7 @@ const { FeeRecord, Payment } = require('../model/finance.model');
 const Invoice                = require('../model/finance.model').Invoice;
 const Student                = require('../model/student.model');
 const Parent                 = require('../model/parent.model');
+const { buildFeeStructure } = require('./financeService');
 const ErrorResponse          = require('../utils/errorResponse');
 const { currentTerm }        = require('./parentFinanceService');
 
@@ -134,6 +135,7 @@ const verifyWebhookSignature = (rawBody, signature) => {
  */
 const recordSchoolPayment = async (paystackDoc, txData) => {
     const { studentId, term, amountNaira, parentId } = paystackDoc;
+
     const upperStudentId = studentId.toUpperCase();
 
     // Load student
@@ -146,6 +148,12 @@ const recordSchoolPayment = async (paystackDoc, txData) => {
         throw new Error(`Student '${studentId}' not found while recording Paystack payment.`);
     }
 
+        const { lineItems, totalFee } = await buildFeeStructure(
+        student.schoolingOption,
+        student.class,
+        paystackDoc.term
+    );
+
     const studentName = `${student.surname} ${student.firstName}`;
 
     // Find or create the FeeRecord
@@ -154,14 +162,6 @@ const recordSchoolPayment = async (paystackDoc, txData) => {
     if (!feeRecord) {
         // Build a default fee structure if the record doesn't exist yet
         const isBoarding = student.schoolingOption === 'Boarding';
-        const lineItems = [
-            { description: 'School Fees',        amount: 181200 },
-            { description: 'Development Levy',   amount: 24160  },
-            { description: 'ICT / Computer',     amount: 6040   },
-            { description: 'Books & Stationery', amount: 30200  },
-            ...(isBoarding ? [{ description: 'Boarding (Feeding + Hostel)', amount: 60400 }] : []),
-        ];
-        const totalFee = lineItems.reduce((s, i) => s + i.amount, 0);
 
         feeRecord = await FeeRecord.create({
             studentId:   upperStudentId,

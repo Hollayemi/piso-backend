@@ -24,6 +24,8 @@
 
 const { FeeRecord, Payment, Invoice } = require('../model/finance.model');
 const ErrorResponse = require('../utils/errorResponse');
+const { deriveFeeCategory, termSlotName } = require('./settingsService');
+// const { deriveFeeCategory } = require('./settingsService');
 
 // ─── Term helpers ─────────────────────────────────────────────────────────────
 
@@ -116,9 +118,7 @@ const generateInvoiceId = async () => {
         serialNumber: nextSerial,
     };
 };
-
-// ─── Fee structure builder ────────────────────────────────────────────────────
-
+ 
 /**
  * Builds the invoice line items for a student based on their class and
  * schooling option. Fee structure is configurable — in production this would
@@ -127,22 +127,34 @@ const generateInvoiceId = async () => {
  * @param {string} schooling   'Day' | 'Boarding'
  * @returns {{ lineItems: Array, totalFee: number }}
  */
-const buildFeeStructure = (schooling) => {
-    const isBoarding = schooling === 'Boarding';
-
-    const lineItems = [
-        { description: 'School Fees',         amount: 181200 },
-        { description: 'Development Levy',    amount: 24160  },
-        { description: 'ICT / Computer',      amount: 6040   },
-        { description: 'Books & Stationery',  amount: 30200  },
-    ];
-
-    if (isBoarding) {
-        lineItems.push({ description: 'Boarding (Feeding + Hostel)', amount: 60400 });
+const buildFeeStructure = async (schoolingOption, className, termString) => {
+    const Settings = require('../model/settings.model');
+    const settings = await Settings.getSingleton();
+    const feeStructure = settings || {};
+ 
+    const categoryKey = deriveFeeCategory(className, schoolingOption);
+    const termKey     = termSlotName(termString || currentTerm());
+    const category    = feeStructure[categoryKey];
+ 
+    if (category && category[termKey] && category[termKey].items && category[termKey].items.length) {
+        const lineItems = category[termKey].items.map((i) => ({
+            description: i.description,
+            amount:      i.amount,
+        }));
+        const totalFee = lineItems.reduce((sum, i) => sum + i.amount, 0);
+        return { lineItems, totalFee };
     }
-
-    const totalFee = lineItems.reduce((sum, item) => sum + item.amount, 0);
-
+ 
+    // Fallback to hardcoded defaults if DB has no data
+    const isBoarding = (schoolingOption || '').toLowerCase() === 'boarding';
+    const lineItems = [
+        { description: 'School Fees',        amount: 181200 },
+        { description: 'Development Levy',   amount: 24160  },
+        { description: 'ICT / Computer',     amount: 6040   },
+        { description: 'Books & Stationery', amount: 30200  },
+        ...(isBoarding ? [{ description: 'Boarding (Feeding + Hostel)', amount: 60400 }] : []),
+    ];
+    const totalFee = lineItems.reduce((sum, i) => sum + i.amount, 0);
     return { lineItems, totalFee };
 };
 
