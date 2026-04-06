@@ -9,7 +9,7 @@ const GuardianSchema = new mongoose.Schema(
         homeAddress:   { type: String, trim: true, default: '' },
         homePhone:     { type: String, trim: true, default: '' },
         whatsApp:      { type: String, trim: true, default: '' },
-        email:         { type: String, lowercase: true, trim: true, default: '' },
+        // email:         { type: String, lowercase: true, trim: true, default: '' },
     },
     { _id: false }
 );

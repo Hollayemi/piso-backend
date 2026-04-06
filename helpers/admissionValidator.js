@@ -4,12 +4,12 @@ const Joi = require('joi');
 
 const guardianSchema = Joi.object({
     name:          Joi.string().trim().required().label('Name'),
-    occupation:    Joi.string().trim().required().label('Occupation'),
+    occupation:    Joi.string().trim().optional().allow("").label('Occupation'),
     officeAddress: Joi.string().trim().required().label('Office Address'),
     homeAddress:   Joi.string().trim().required().label('Home Address'),
     homePhone:     Joi.string().trim().required().label('Home Phone'),
     whatsApp:      Joi.string().trim().optional().allow("").label('WhatsApp'),
-    email:         Joi.string().email().lowercase().trim().required().label('Email'),
+    // email:         Joi.string().email().lowercase().trim().required().label('Email'),
 });
 
 

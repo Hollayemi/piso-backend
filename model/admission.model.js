@@ -102,7 +102,7 @@ const AdmissionSchema = new mongoose.Schema(
     {
         applicationId: {
             type: String,
-            unique: true,
+            // unique: true,
             required: true,
             trim: true,
         },

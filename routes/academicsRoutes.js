@@ -66,19 +66,19 @@ const CRUD_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN];
  * Read-only access to Classes, Subjects, and Timetable.
  * principal + teacher can view; accountant has no access here.
  */
-const READ_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PRINCIPAL, ROLES.TEACHER];
+const READ_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PRINCIPAL, ROLES.TEACHER, ROLES.PARENT];
 
-// ─── Apply JWT guard to every route in this router ───────────────────────────
-
-router.use(protect);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CLASSES  —  /academics/classes
 // ═══════════════════════════════════════════════════════════════════════════════
 
+router.route('/classes').get(getAllClasses)
+
+router.use(protect);   
+
 router
     .route('/classes')
-    .get(authorize(...READ_ROLES), getAllClasses)
     .post(authorize(...CRUD_ROLES), createClass);
 
 router

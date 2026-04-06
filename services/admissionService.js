@@ -107,7 +107,7 @@ const toListItem = (doc) => ({
     firstName: doc.firstName,
     surname: doc.surname,
     email: doc.correspondenceEmail,
-    phone: doc.parentId.father?.homePhone || '',
+    phone: doc.parentId?.father?.homePhone || '',
     appliedClass: doc.classPreferences?.classInterestedIn || '',
     schoolingOption: doc.schoolingOption,
     dateApplied: doc.dateApplied,
@@ -219,6 +219,8 @@ const getAllApplications = async ({
         Admission.countDocuments(filter),
     ]);
 
+    // console.log(applications)
+
     const [statsAgg] = await Admission.aggregate([
         {
             $group: {
@@ -300,6 +302,7 @@ const submitApplication = async (body, files = {}, ip = '') => {
         body.howDidYouKnow,
     )
 
+
     const admission = await Admission.create({
         applicationId,
         parentId: parentInfo._id,
@@ -321,8 +324,9 @@ const submitApplication = async (body, files = {}, ip = '') => {
         schools: body.schools || [],
         health: body.health || {},
         documents: savedDocs,
-        submittedFrom: ip,
+        // submittedFrom: ip,
     });
+
 
     return {
         applicationRef: admission.applicationId,

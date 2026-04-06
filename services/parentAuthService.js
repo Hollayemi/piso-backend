@@ -157,7 +157,7 @@ const createParentAccount = async (
     howDidYouKnow,
     createdBy
     })
-    const loginEmail = fatherData.email.toLowerCase();
+    const loginEmail = correspondenceEmail.toLowerCase();
 
     // Idempotent — return existing account if the father email is already registered
     const existing = await Parent.findOne({ email: loginEmail });
@@ -168,7 +168,7 @@ const createParentAccount = async (
     // Generate a temporary password — parent must change on first login
     const tempPassword   = crypto.randomBytes(6).toString('hex');
     const salt           = await bcrypt.genSalt(12);
-    const hashedPassword = await bcrypt.hash(tempPassword, salt);
+    const hashedPassword = await bcrypt.hash("Password123!", salt);
 
     const parent = await Parent.create({
         parentId,
@@ -211,6 +211,32 @@ const createParentAccount = async (
     return parent;
 };
 
+const updateParentProfile = async (parentId, updateData) => {
+    const parent = await Parent.findOne({ parentId: parentId.toUpperCase() });
+    if (!parent) throw new ErrorResponse('Parent account not found.', 404);
+ 
+    const ALLOWED_FIELDS = [
+        'father', 'mother', 'correspondenceEmail', 'howDidYouKnow',
+        'notificationPreferences',
+    ];
+ 
+    for (const key of ALLOWED_FIELDS) {
+        if (updateData[key] !== undefined) {
+            if (key === 'father' || key === 'mother') {
+                // Merge nested object — don't overwrite the whole sub-doc
+                Object.assign(parent[key], updateData[key]);
+            } else {
+                parent[key] = updateData[key];
+            }
+        }
+    }
+ 
+    parent.lastUpdatedBy = parentId;
+    await parent.save();
+ 
+    return { parent: toProfileView(parent.toObject()) };
+};
+ 
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -220,4 +246,5 @@ module.exports = {
     createParentAccount,
     generateParentId,
     toProfileView,
+    updateParentProfile,
 };

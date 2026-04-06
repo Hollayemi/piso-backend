@@ -112,6 +112,7 @@ const parentChildrenRoutes = require('./routes/parentChildrenRoutes');
 const eventRoutes = require('./routes/eventRoutes');
 const reportCardRoutes        = require('./routes/reportCardRoutes');
 const parentReportCardRoutes  = require('./routes/parentReportCardRoutes');
+const parentProfileRoutes  = require('./routes/parentProfileRoutes');
 // ─── Route Mounts ─────────────────────────────────────────────────────────────
 
 app.use('/api/v1/auth',       authRoutes);
@@ -130,6 +131,7 @@ app.use('/api/v1/parent/admissions', parentAdmissionsRoutes);
 app.use('/api/v1', parentChildrenRoutes);
 app.use('/api/v1', parentReportCardRoutes);
 app.use('/api/v1', parentFinanceRoutes);
+app.use('/api/v1', parentProfileRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

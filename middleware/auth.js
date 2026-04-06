@@ -36,6 +36,7 @@ const ROLES = Object.freeze({
     PRINCIPAL: 'principal',
     ACCOUNTANT: 'accountant',
     TEACHER: 'teacher',
+    PARENT: 'parent',
 });
 
 // ─── Paths exempt from the mustResetPassword block ────────────────────────────
