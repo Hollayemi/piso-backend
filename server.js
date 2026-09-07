@@ -48,7 +48,7 @@ app.use(cors(corsOptions));
 //     message:  'Too many request applications submitted. Please try again later.',
 // });
 
-app.use('/api/', globalLimiter);
+// app.use('/api/', globalLimiter);
 
 // ─── Body Parsers ─────────────────────────────────────────────────────────────
 
@@ -113,7 +113,7 @@ const parentProfileRoutes  = require('./routes/parentProfileRoutes');
 // ─── Route Mounts ─────────────────────────────────────────────────────────────
 
 app.use('/api/v1/auth',       authRoutes);
-app.use('/api/v1/admissions', submissionLimiter, admissionRoutes);
+app.use('/api/v1/admissions', admissionRoutes);
 app.use('/api/v1/students',   studentRoutes);
 app.use('/api/v1/staff',      staffRoutes);
 app.use('/api/v1/academics',  academicsRoutes);
