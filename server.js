@@ -28,12 +28,7 @@ app.use(hpp());
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 
 const corsOptions = {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || [
-        'http://localhost:3000',
-        'https://www.progressschools.com',
-        'https://progressschools.com',
-        'https://piso-demo.vercel.app',
-    ],
+    origin: '*',
     credentials:         true,
     optionsSuccessStatus: 200,
 };
