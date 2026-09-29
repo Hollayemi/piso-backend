@@ -57,7 +57,7 @@ const createStudentSchema = Joi.object({
         otherwise: Joi.object({
             name:          Joi.string().trim().min(2).max(100).required(),
             occupation:    Joi.string().trim().min(2).max(100).required(),
-            officeAddress: Joi.string().trim().min(5).max(200).required(),
+            officeAddress: Joi.string().trim().min(5).max(200).optional(),
             homeAddress:   Joi.string().trim().min(5).max(200).required(),
             homePhone:     Joi.string().trim().required(),
             whatsApp:      Joi.string().trim().required(),
@@ -71,7 +71,7 @@ const createStudentSchema = Joi.object({
         otherwise: Joi.object({
             name:          Joi.string().trim().min(2).max(100).required(),
             occupation:    Joi.string().trim().min(2).max(100).required(),
-            officeAddress: Joi.string().trim().min(5).max(200).required(),
+            officeAddress: Joi.string().trim().min(5).max(200).optional(),
             homeAddress:   Joi.string().trim().min(5).max(200).required(),
             homePhone:     Joi.string().trim().required(),
             whatsApp:      Joi.string().trim().required(),

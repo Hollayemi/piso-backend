@@ -1,17 +1,9 @@
-/**
- * controllers/parentProfileController.js
- *
- * HTTP layer for the authenticated parent's own profile management.
- *
- *   GET    /parent/profile       → getProfile  (re-uses authController.getProfile)
- *   PATCH  /parent/profile       → updateProfile
- */
-
 const asyncHandler          = require('../middleware/asyncHandler');
 const ErrorResponse         = require('../utils/errorResponse');
 const { sendSuccess }       = require('../utils/sendResponse');
 const parentAuthService     = require('../services/parentAuthService');
 const Joi                   = require('joi');
+const { changePasswordSchema } = require('../helpers/authValidations');
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
@@ -62,4 +54,29 @@ exports.updateProfile = asyncHandler(async (req, res, next) => {
     // req.user.id is the parentId (set by protect middleware)
     const result = await parentAuthService.updateParentProfile(req.user.id, value);
     sendSuccess(res, 200, 'Profile updated successfully', result);
+});
+
+
+/**
+ * @desc    Change the authenticated staff member's password
+ * @route   PUT /api/v1/auth/change-password
+ * @access  Private — any authenticated role (also allowed when mustResetPassword = true)
+ */
+
+exports.changePassword = asyncHandler(async (req, res, next) => {
+    const { error, value } = changePasswordSchema.validate(req.body, {
+        abortEarly:   false,
+        stripUnknown: true,
+    });;
+    if (error) {
+        return next(new ErrorResponse('Validation failed', 400, extractJoiErrors(error)));
+    }
+
+    const result = await parentAuthService.changePassword(
+        req.user.id,
+        value.currentPassword,
+        value.newPassword
+    );
+
+    sendSuccess(res, 200, result.message);
 });

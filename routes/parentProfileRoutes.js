@@ -14,7 +14,8 @@ const express = require('express');
 const router  = express.Router();
 
 const { protect }        = require('../middleware/auth');
-const { updateProfile }  = require('../controllers/parentProfileController');
+const { updateProfile, changePassword }  = require('../controllers/parentProfileController');
+
 
 // Simple inline parent-role guard (same pattern as parentAdmissionsRoutes)
 const requireParent = (req, res, next) => {
@@ -30,5 +31,7 @@ router.use(requireParent);
 
 // PATCH /parent/profile
 router.patch('/parent/profile', updateProfile);
+
+router.put("/parent/change-password", changePassword )
 
 module.exports = router;

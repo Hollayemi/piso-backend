@@ -200,8 +200,6 @@ const createParentAccount = async (
         createdBy,
     });
 
-    // In production: send the tempPassword to the parent's email via nodemailer.
-    // For development: log to console only.
     if (process.env.NODE_ENV === 'development') {
         console.log(
             `[ParentAuth] Created account ${parentId} | email: ${loginEmail} | temp password: ${tempPassword}`

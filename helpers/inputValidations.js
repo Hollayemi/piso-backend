@@ -123,7 +123,7 @@ const admissionSchema = Joi.object({
     father: Joi.object({
         name: Joi.string().trim().min(2).max(100).required(),
         occupation: Joi.string().trim().min(2).max(100).required(),
-        officeAddress: Joi.string().trim().min(5).max(200).required(),
+        officeAddress: Joi.string().trim().min(5).max(200).optional(),
         homeAddress: Joi.string().trim().min(5).max(200).required(),
         homePhone: Joi.string().custom(nigerianPhone).required().messages({
             'any.invalid': 'Invalid Nigerian phone number format'
@@ -138,7 +138,7 @@ const admissionSchema = Joi.object({
     mother: Joi.object({
         name: Joi.string().trim().min(2).max(100).required(),
         occupation: Joi.string().trim().min(2).max(100).required(),
-        officeAddress: Joi.string().trim().min(5).max(200).required(),
+        officeAddress: Joi.string().trim().min(5).max(200).optional(),
         homeAddress: Joi.string().trim().min(5).max(200).required(),
         homePhone: Joi.string().custom(nigerianPhone).required().messages({
             'any.invalid': 'Invalid Nigerian phone number format'

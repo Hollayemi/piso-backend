@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs').promises;
-
+const jwt = require('jsonwebtoken');
 const Admission = require('../model/admission.model');
 const parentService = require("./parentAuthService")
 const ErrorResponse = require('../utils/errorResponse');
@@ -272,6 +272,11 @@ const getApplication = async (id) => {
     return { application: toDetailView(application) };
 };
 
+const signToken = (payload) =>
+    jwt.sign(payload, process.env.JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRE || '7d',
+    });
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 1.3  POST /admissions  (public)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -302,6 +307,7 @@ const submitApplication = async (body, files = {}, ip = '') => {
         body.howDidYouKnow,
     )
 
+    console.log({ parentInfo })
 
     const admission = await Admission.create({
         applicationId,
@@ -327,6 +333,13 @@ const submitApplication = async (body, files = {}, ip = '') => {
         // submittedFrom: ip,
     });
 
+    const token = signToken({
+        id: parentInfo.parentId,
+        role: 'parent',
+        email: parentInfo.email,
+        name: parentInfo.familyName,
+    });
+
 
     return {
         applicationRef: admission.applicationId,
@@ -335,8 +348,11 @@ const submitApplication = async (body, files = {}, ip = '') => {
         appliedClass: admission.classPreferences?.classInterestedIn || '',
         status: admission.status,
         dateApplied: admission.dateApplied,
+        token,
+        parent: parentService.toProfileView(parentInfo.toObject())
     };
 };
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 1.4  PATCH /admissions/:id/status
@@ -516,7 +532,7 @@ const getOffersList = async ({ page, limit, search, acceptanceStatus } = {}) => 
     ]);
 
     const [statsAgg] = await Admission.aggregate([
-        { $match: { "screening.screeningStatus": "Verified"} },
+        { $match: { "screening.screeningStatus": "Verified" } },
         {
             $group: {
                 _id: null,

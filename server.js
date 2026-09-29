@@ -20,13 +20,13 @@ const app = express();
 connectDB();
 
 // ─── Security Middleware ──────────────────────────────────────────────────────
-
+ 
 app.use(helmet());
 app.use(mongoSanitize());
 app.use(hpp());
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
-
+ 
 const corsOptions = {
     origin: '*',
     credentials:         true,
