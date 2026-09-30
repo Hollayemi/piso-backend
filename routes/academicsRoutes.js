@@ -108,21 +108,21 @@ router
 
 /**
  * ⚠️  Cell-level routes MUST come before the class-level route
- *     to prevent Express matching "cell" as a :className value.
+ *     to prevent Express matching "cell" as a :classId value.
  *
- *   PUT    /timetable/:className/cell  → assign a slot
- *   DELETE /timetable/:className/cell  → clear a single slot
- *   GET    /timetable/:className       → get full timetable grid
- *   DELETE /timetable/:className       → clear entire timetable
+ *   PUT    /timetable/:classId/cell  → assign a slot
+ *   DELETE /timetable/:classId/cell  → clear a single slot
+ *   GET    /timetable/:classId       → get full timetable grid
+ *   DELETE /timetable/:classId       → clear entire timetable
  */
 
 router
-    .route('/timetable/:className/cell')
+    .route('/timetable/:classId/cell')
     .put(saveTimetableCell)
     .delete(authorize(...CRUD_ROLES), clearTimetableCell);
 
 router
-    .route('/timetable/:className')
+    .route('/timetable/:classId')
     .get(authorize(...READ_ROLES), getTimetable)
     .delete(authorize(...CRUD_ROLES), clearFullTimetable);
 

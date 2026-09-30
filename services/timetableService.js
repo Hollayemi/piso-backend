@@ -95,7 +95,7 @@ const buildTimetableResponse = (doc) => {
     const completionPercent = Math.round((filledSlots / totalSlots) * 100);
 
     return {
-        className: doc.className,
+        className: doc.class.name,
         session:   doc.session,
         term:      doc.term,
         timetable,
@@ -111,19 +111,22 @@ const buildTimetableResponse = (doc) => {
 // ─── Find or Create Timetable ─────────────────────────────────────────────────
 
 /**
- * Finds a timetable document for className+session+term,
+ * Finds a timetable document for classId+session+term,
  * creating an empty one if it doesn't exist yet.
  *
- * @param {string} className
+ * @param {string} classId
  * @param {string} session
  * @param {string} term
  * @param {string} [userId]  - For createdBy audit on first create
  */
-const findOrCreate = async (className, session, term, userId = '') => {
-    let tt = await Timetable.findOne({ className, session, term });
+const findOrCreate = async (classId, session, term, userId = '') => {
+    console.log({classId})
+    let tt = await Timetable.findOne({ class: classId, session, term });
+
+    console.log({ tt })
     if (!tt) {
         tt = await Timetable.create({
-            className,
+            class:  classId,
             session,
             term,
             slots:     {},
@@ -139,24 +142,21 @@ const findOrCreate = async (className, session, term, userId = '') => {
  * Retrieves the timetable for a class + session + term.
  * Returns an empty grid if none exists yet.
  *
- * @param {string} className - URL-decoded class name
+ * @param {string} classId - URL-decoded class name
  * @param {object} query     - { session?, term? }
  */
-const getTimetableForClass = async (className, { session, term } = {}) => {
-    // Verify the class exists in the DB
-    const cls = await Class.findOne({ name: new RegExp(`^${className}$`, 'i') }).lean();
-    if (!cls) {
-        throw new ErrorResponse(`Class '${className}' not found`, 404);
-    }
+const getTimetableForClass = async (classId, { session, term } = {}) => {
 
     const resolvedSession = session || currentSession();
     const resolvedTerm    = term    || currentTerm();
-
+    console.log(classId)
     const tt = await Timetable.findOne({
-        className: cls.name,
+        class:      classId,
         session:   resolvedSession,
         term:      resolvedTerm,
-    }).lean();
+    }).populate('class').lean();
+
+    console.log({tt})
 
     if (!tt) {
         // Return an empty grid rather than a 404 — class exists, timetable not yet built
@@ -170,7 +170,7 @@ const getTimetableForClass = async (className, { session, term } = {}) => {
             }
         }
         return {
-            className: cls.name,
+            className: tt?.class?.name,
             session:   resolvedSession,
             term:      resolvedTerm,
             timetable: emptyGrid,
@@ -195,11 +195,11 @@ const getTimetableForClass = async (className, { session, term } = {}) => {
  *   1. Break slots cannot be written to (validated in Joi schema too).
  *   2. Teacher cannot be assigned to two classes in the same slot+day+session+term.
  *
- * @param {string} className - URL-decoded class name
+ * @param {string} classId - URL-decoded class name
  * @param {object} body      - Validated request body
  * @param {string} userId    - Auth user ID (for audit)
  */
-const saveTimetableCell = async (className, body, userId) => {
+const saveTimetableCell = async (classId, body, userId) => {
     const { day, slotId, subjectId, teacherId, note, session, term } = body;
 
     // Guard: break slots (belt-and-suspenders; Joi already blocks BREAK_SLOT_IDS)
@@ -212,9 +212,9 @@ const saveTimetableCell = async (className, body, userId) => {
     }
 
     // Verify class exists
-    const cls = await Class.findOne({ name: new RegExp(`^${className}$`, 'i') }).lean();
+    const cls = await Class.findById(classId).lean();
     if (!cls) {
-        throw new ErrorResponse(`Class '${className}' not found`, 404, [{ code: 'CLASS_NOT_FOUND' }]);
+        throw new ErrorResponse(`Class '${classId}' not found`, 404, [{ code: 'CLASS_NOT_FOUND' }]);
     }
 
     // Resolve subject snapshot
@@ -238,22 +238,22 @@ const saveTimetableCell = async (className, body, userId) => {
 
     // Clash detection: same teacher, same day, same slot, different class, same session+term
     const clashQuery = {
-        className: { $ne: cls.name },
+        class: { $ne: cls._id },
         session:   resolvedSession,
         term:      resolvedTerm,
         [`slots.${day}.${slotId}.teacherId`]: staff.staffId,
     };
-    const clash = await Timetable.findOne(clashQuery, { className: 1 }).lean();
+    const clash = await Timetable.findOne(clashQuery, { class: 1 }).lean();
     if (clash) {
         throw new ErrorResponse(
-            `Teacher '${staff.surname} ${staff.firstName}' is already assigned to '${clash.className}' on ${day} slot ${slotId}.`,
+            `Teacher '${staff.surname} ${staff.firstName}' is already assigned to '${cls.name}' on ${day} slot ${slotId}.`,
             409,
             [{ code: 'TEACHER_CLASH' }]
         );
     }
 
     // Find or create the timetable document
-    const tt = await findOrCreate(cls.name, resolvedSession, resolvedTerm, userId);
+    const tt = await findOrCreate(cls._id, resolvedSession, resolvedTerm, userId);
 
     // Write the cell
     const cellPath = `slots.${day}.${slotId}`;
@@ -293,23 +293,23 @@ const saveTimetableCell = async (className, body, userId) => {
 /**
  * Removes subject + teacher assignment from a single slot.
  *
- * @param {string} className
+ * @param {string} classId
  * @param {object} body - { day, slotId, session?, term? }
  * @param {string} userId
  */
-const clearTimetableCell = async (className, body, userId) => {
+const clearTimetableCell = async (classId, body, userId) => {
     const { day, slotId, session, term } = body;
 
-    const cls = await Class.findOne({ name: new RegExp(`^${className}$`, 'i') }).lean();
+    const cls = await Class.findById(classId).lean();
     if (!cls) {
-        throw new ErrorResponse(`Class '${className}' not found`, 404, [{ code: 'CLASS_NOT_FOUND' }]);
+        throw new ErrorResponse(`Class '${classId}' not found`, 404, [{ code: 'CLASS_NOT_FOUND' }]);
     }
 
     const resolvedSession = session || currentSession();
     const resolvedTerm    = term    || currentTerm();
 
     const tt = await Timetable.findOne({
-        className: cls.name,
+        class: cls.name,
         session:   resolvedSession,
         term:      resolvedTerm,
     });
@@ -332,21 +332,21 @@ const clearTimetableCell = async (className, body, userId) => {
 /**
  * Removes ALL slot assignments for a class in a given session + term.
  *
- * @param {string} className
+ * @param {string} classId
  * @param {object} query - { session?, term? }
  * @param {string} userId
  */
-const clearFullTimetable = async (className, { session, term } = {}, userId) => {
-    const cls = await Class.findOne({ name: new RegExp(`^${className}$`, 'i') }).lean();
+const clearFullTimetable = async (classId, { session, term } = {}, userId) => {
+    const cls = await Class.findById(classId).lean();
     if (!cls) {
-        throw new ErrorResponse(`Class '${className}' not found`, 404, [{ code: 'CLASS_NOT_FOUND' }]);
+        throw new ErrorResponse(`Class '${classId}' not found`, 404, [{ code: 'CLASS_NOT_FOUND' }]);
     }
 
     const resolvedSession = session || currentSession();
     const resolvedTerm    = term    || currentTerm();
 
     const tt = await Timetable.findOne({
-        className: cls.name,
+        class: cls.name,
         session:   resolvedSession,
         term:      resolvedTerm,
     });

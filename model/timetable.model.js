@@ -1,22 +1,3 @@
-/**
- * timetable.model.js
- *
- * Stores the weekly timetable for a single class arm
- * for a given academic session and term.
- *
- * Design: one document per (className + session + term).
- * The `slots` map represents the entire grid:
- *
- *   slots: {
- *     Monday:    { T1: { subjectId, subjectName, subjectCode, color, teacherId, teacherName, note } },
- *     Tuesday:   { … },
- *     …
- *   }
- *
- * Break slots (e.g. T4 = Short Break, T7 = Long Break) are defined
- * as application-level constants and are NEVER stored in the DB —
- * they are injected into query responses by the service layer.
- */
 
 const mongoose = require('mongoose');
 
@@ -24,13 +5,8 @@ const mongoose = require('mongoose');
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-/**
- * Valid teaching slot IDs.
- * T4 and T7 are reserved for break periods and are rejected on write.
- * Adjust to match your actual school bell schedule.
- */
 const ALL_SLOT_IDS   = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9'];
-const BREAK_SLOT_IDS = ['T4', 'T7'];
+const BREAK_SLOT_IDS = [];
 const TEACH_SLOT_IDS = ALL_SLOT_IDS.filter((s) => !BREAK_SLOT_IDS.includes(s));
 // → ['T1', 'T2', 'T3', 'T5', 'T6', 'T8', 'T9']
 
@@ -49,9 +25,6 @@ const CellSchema = new mongoose.Schema(
     { _id: false }
 );
 
-// ─── Day sub-schema: maps slotId → Cell ──────────────────────────────────────
-// We use a flexible Mixed type so slot keys (T1 … T9) are dynamic.
-
 const DaySchema = new mongoose.Schema(
     {
         T1: { type: CellSchema, default: null },
@@ -65,16 +38,14 @@ const DaySchema = new mongoose.Schema(
     { _id: false }
 );
 
-// ─── Main Timetable Schema ────────────────────────────────────────────────────
-
 const TimetableSchema = new mongoose.Schema(
     {
-        className: {
-            type:     String,
+        class: {
+            type:     mongoose.Types.ObjectId,
+            ref:       "Class",
             required: [true, 'Class name is required'],
             trim:     true,
         },
-
         session: {
             type:     String,
             required: [true, 'Academic session is required'],
@@ -107,13 +78,11 @@ const TimetableSchema = new mongoose.Schema(
     }
 );
 
-// ─── Compound index — one timetable per class per term/session ────────────────
-
 TimetableSchema.index(
-    { className: 1, session: 1, term: 1 },
+    { class: 1, session: 1, term: 1 },
     { unique: true }
 );
-TimetableSchema.index({ className: 1 });
+TimetableSchema.index({ class: 1 });
 TimetableSchema.index({ session:   1, term: 1 });
 
 // ─── Exports ──────────────────────────────────────────────────────────────────

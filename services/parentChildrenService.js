@@ -133,8 +133,11 @@ const getChildren = async (parentId) => {
 
   // ── All students belonging to this parent ──────────────────────────────────
   const students = await Student.find({ parentId })
+  .populate("class")
     .sort({ firstName: 1 })
     .lean({ virtuals: true });
+
+    console.log(students)
 
   if (!students.length) return { children: [] };
 
@@ -178,8 +181,9 @@ const getChildren = async (parentId) => {
       surname:         student.surname,
       middleName:      student.middleName || '',
       gender:          student.gender,
-      class:           student.class,
-      level:           deriveLevel(student.class),
+      class:           student.class.name,
+      classInfo:       student.class,
+      level:           deriveLevel(student.class.level),
       schoolingOption: student.schoolingOption,
       status:          student.status,
       dateOfBirth:     student.dateOfBirth,

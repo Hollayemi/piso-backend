@@ -93,6 +93,7 @@ app.get('/api/health', (req, res) => {
 // ─── Route Imports ────────────────────────────────────────────────────────────
 
 const { seedStaff } = require('./scripts/seedStaffs');
+const settingsRoutes  = require('./routes/settingsRoutes');
 const authRoutes      = require('./routes/authRoutes');
 const admissionRoutes = require('./routes/admissionRoutes');
 const studentRoutes   = require('./routes/studentRoutes');
@@ -101,7 +102,6 @@ const academicsRoutes = require('./routes/academicsRoutes');
 const financeRoutes   = require('./routes/financeRoutes');
 const inventoryRoutes = require('./routes/inventoryRoutes');
 const transportRoutes = require('./routes/transportRoutes');
-const settingsRoutes  = require('./routes/settingsRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const parentFinanceRoutes = require('./routes/parentFinanceRoutes');
 const parentAdmissionsRoutes = require('./routes/parentAdmissionsRoutes');
@@ -125,10 +125,10 @@ app.use('/api/v1/dashboard',  dashboardRoutes);
 app.use('/api/v1/events', eventRoutes);
 app.use('/api/v1/report', reportCardRoutes);
 app.use('/api/v1/parent/admissions', parentAdmissionsRoutes); 
-app.use('/api/v1', parentChildrenRoutes);
-app.use('/api/v1', parentReportCardRoutes);
-app.use('/api/v1', parentFinanceRoutes);
-app.use('/api/v1', parentProfileRoutes);
+app.use('/api/v1/parent', parentChildrenRoutes);
+app.use('/api/v1/parent', parentReportCardRoutes);
+app.use('/api/v1/parent', parentFinanceRoutes);
+app.use('/api/v1/parent', parentProfileRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

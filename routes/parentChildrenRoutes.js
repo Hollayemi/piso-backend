@@ -42,11 +42,11 @@ router.use(parentAuthMiddleware);
 
 // ─── 4.  GET /parent/children ─────────────────────────────────────────────────
 // Returns a summary list of all children linked to the authenticated parent.
-router.get('/parent/children', getChildren);
+router.get('/children', getChildren);
 
 // ─── 5.  GET /parent/children/:id ────────────────────────────────────────────
 // Returns full profile for one child. Access-guarded against the parent's
 // linked student list — 403 is returned for unlinked student IDs.
-router.get('/parent/children/:id', getChildProfile);
+router.get('/children/:id', getChildProfile);
 
 module.exports = router;

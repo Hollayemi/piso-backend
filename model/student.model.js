@@ -1,17 +1,3 @@
-/**
- * model/student.model.js
- *
- * A Student document holds only the child's own information.
- * All parent/guardian data lives in the Parent model.
- *
- * Relationship:
- *   Student.parentId  →  Parent.parentId  (many-to-one, single parent record per family)
- *
- * To get parent information when querying a student use:
- *   Student.findOne({ studentId }).populate('parent')
- *
- * ID format: STU-YYYY-NNNN  e.g. STU-2025-0047
- */
 
 const mongoose = require('mongoose');
 
@@ -181,7 +167,8 @@ const StudentSchema = new mongoose.Schema(
 
         // ── Academic Info ──────────────────────────────────────────────────
         class: {
-            type:     String,
+            type:     mongoose.Types.ObjectId,
+            ref:      "Class",
             required: [true, 'Class is required'],
             trim:     true,
         },

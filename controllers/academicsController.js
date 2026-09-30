@@ -210,8 +210,9 @@ exports.getTimetable = asyncHandler(async (req, res, next) => {
     }
 
     // Decode URL-encoded class name e.g. "JSS%201A" → "JSS 1A"
-    const className = decodeURIComponent(req.params.className);
-    const result    = await timetableService.getTimetableForClass(className, value);
+    const classId = decodeURIComponent(req.params.classId);
+    console.log(classId)
+    const result    = await timetableService.getTimetableForClass(classId, value);
     sendSuccess(res, 200, '', result);
 });
 
@@ -227,9 +228,8 @@ exports.saveTimetableCell = asyncHandler(async (req, res, next) => {
     if (error) {
         return next(new ErrorResponse('Validation failed', 400, extractJoiErrors(error)));
     }
-
-    const className = decodeURIComponent(req.params.className);
-    const result    = await timetableService.saveTimetableCell(className, value, req.user.id);
+    const classId = decodeURIComponent(req.params.classId);
+    const result    = await timetableService.saveTimetableCell(classId, value, req.user.id);
     sendSuccess(res, 200, 'Timetable slot updated', result);
 });
 
@@ -246,8 +246,8 @@ exports.clearTimetableCell = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse('Validation failed', 400, extractJoiErrors(error)));
     }
 
-    const className = decodeURIComponent(req.params.className);
-    const result    = await timetableService.clearTimetableCell(className, value, req.user.id);
+    const classId = decodeURIComponent(req.params.classId);
+    const result    = await timetableService.clearTimetableCell(classId, value, req.user.id);
     sendSuccess(res, 200, 'Timetable slot cleared', result);
 });
 
@@ -264,7 +264,7 @@ exports.clearFullTimetable = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse('Validation failed', 400, extractJoiErrors(error)));
     }
 
-    const className = decodeURIComponent(req.params.className);
-    const result    = await timetableService.clearFullTimetable(className, value, req.user.id);
-    sendSuccess(res, 200, `Timetable cleared for ${className}`, result);
+    const classId = decodeURIComponent(req.params.classId);
+    const result    = await timetableService.clearFullTimetable(classId, value, req.user.id);
+    sendSuccess(res, 200, `Timetable cleared for ${classId}`, result);
 });

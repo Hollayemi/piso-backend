@@ -24,8 +24,8 @@ router.use(parentAuthMiddleware);
 
 // ⚠️ More-specific paths before /:studentId
 
-router.get('/parent/report-cards/:studentId/pdf', ctrl.downloadMyReportCardPdf);
-router.get('/parent/report-cards/:studentId/all', ctrl.getMyReportCards);
-router.get('/parent/report-cards/:studentId',     ctrl.getMyReportCard);
+router.get('/report-cards/:studentId/pdf', ctrl.downloadMyReportCardPdf);
+router.get('/report-cards/:studentId/all', ctrl.getMyReportCards);
+router.get('/report-cards/:studentId',     ctrl.getMyReportCard);
 
 module.exports = router;

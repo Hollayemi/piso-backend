@@ -23,6 +23,7 @@ const SettingsModel = require("../model/settings.model")
 const currentTerm = async () => {
     const settings = await SettingsModel.getSingleton();
     const term = await settings.getCurrentTerm();
+    if (!term.name) throw new Error("Term not set by the school.");
     return term.name
 };
 
@@ -71,7 +72,7 @@ const getChildFeeRecord = async (studentId, linkedStudentIds, { term, session } 
     const student = await Student.findOne(
         { studentId: upperStudentId, status: 'Active' },
         { studentId: 1, surname: 1, firstName: 1, class: 1, schoolingOption: 1 }
-    ).lean();
+    ).populate("class").lean();
 
     if (!student) {
         throw new ErrorResponse(`Student '${studentId}' not found or not active.`, 404);
@@ -99,7 +100,7 @@ const getChildFeeRecord = async (studentId, linkedStudentIds, { term, session } 
     return {
         studentId:      student.studentId,
         studentName:    `${student.surname} ${student.firstName}`,
-        class:          student.class,
+        class:          student.class.group,
         schoolingOption: student.schoolingOption,
         term:           resolvedTerm,
         totalFee:       feeRecord?.totalFee        ?? 0,
@@ -134,7 +135,6 @@ const getAllChildrenFees = async (linkedStudentIds, { term } = {}) => {
     if (!linkedStudentIds.length) {
         return { children: [], totalExpected: 0, totalPaid: 0, totalOutstanding: 0 };
     }
-
     
     const resolvedTerm = term || await currentTerm();
     
@@ -143,7 +143,7 @@ const getAllChildrenFees = async (linkedStudentIds, { term } = {}) => {
     const students = await Student.find(
         { studentId: { $in: linkedStudentIds }, status: 'Active' },
         { studentId: 1, surname: 1, firstName: 1, class: 1, schoolingOption: 1 }
-    ).lean();
+    ).populate("class").lean();
 
     // Pull all fee records for these students + term in one query
     const feeRecords = await FeeRecord.find({
@@ -158,7 +158,7 @@ const getAllChildrenFees = async (linkedStudentIds, { term } = {}) => {
         return {
             studentId:   s.studentId,
             studentName: `${s.surname} ${s.firstName}`,
-            class:       s.class,
+            class:       s.class.group,
             schooling:   s.schoolingOption,
             term:        resolvedTerm,
             totalFee:    fr?.totalFee    ?? 0,

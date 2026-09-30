@@ -37,6 +37,7 @@ const generateClassId = async () => {
  * @param {number} studentCount - Count resolved by the service
  */
 const toListItem = (doc, studentCount = 0) => ({
+    _id:          doc._id,
     id:           doc.classId,
     name:         doc.name,
     level:        doc.level,
@@ -62,6 +63,7 @@ const toListItem = (doc, studentCount = 0) => ({
  * @param {Array}  subjects - Subject names assigned to this class
  */
 const toDetailView = (doc, students = [], subjects = [], studentCount = 0) => ({
+    _id:          doc._id,
     id:           doc.classId,
     name:         doc.name,
     level:        doc.level,

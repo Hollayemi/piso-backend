@@ -19,6 +19,7 @@ const Admission = require('../model/admission.model');
 const Parent = require('../model/parent.model');
 const { createParentAccount } = require('./parentAuthService');
 const ErrorResponse = require('../utils/errorResponse');
+const classModel = require('../model/class.model');
 
 // ─── ID Generation ────────────────────────────────────────────────────────────
 
@@ -86,7 +87,8 @@ const toListItem = (doc) => {
         middleName: doc.middleName || '',
         gender: doc.gender,
         dateOfBirth: doc.dateOfBirth,
-        class: doc.class,
+        class: doc.class.name,
+        classInfo: doc.class,
         schoolingOption: doc.schoolingOption,
         status: doc.status,
         stateOfOrigin: doc.stateOfOrigin,
@@ -194,6 +196,7 @@ const getAllStudents = async ({ page, limit, search, class: cls, status, schooli
             .skip(skip)
             .limit(limitNum)
             .populate('parent', '-password -__v')
+            .populate("class")
             .lean({ virtuals: true }),
         Student.countDocuments(filter),
     ]);
@@ -212,7 +215,7 @@ const getAllStudents = async ({ page, limit, search, class: cls, status, schooli
 // ─── 1.2  Get Single Student ──────────────────────────────────────────────────
 
 const getStudentById = async (id) => {
-    const student = await Student.findOne({ studentId: id.toUpperCase() })
+    const student = await Student.findOne({ studentId: id.toUpperCase() }).populate("class")
         .populate('parent', '-password -__v')
         .lean({ virtuals: true });
 
@@ -239,6 +242,8 @@ const createStudent = async (body, files, createdBy, ip) => {
         firstName: new RegExp(`^${body.firstName}$`, 'i'),
         dateOfBirth: body.dateOfBirth,
     });
+
+    const getclass = await classModel.findOne({ group: body.class }).lean()
 
     if (existing) {
         throw new ErrorResponse(
@@ -300,7 +305,7 @@ const createStudent = async (body, files, createdBy, ip) => {
         religion: body.religion || '',
         bloodGroup: body.bloodGroup || '',
         genotype: body.genotype || '',
-        class: body.class,
+        class: getclass._id,
         schoolingOption: body.schoolingOption,
         classPreferences: body.classPreferences || {},
         schools: body.schools || [],

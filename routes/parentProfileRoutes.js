@@ -30,8 +30,8 @@ router.use(protect);
 router.use(requireParent);
 
 // PATCH /parent/profile
-router.patch('/parent/profile', updateProfile);
+router.patch('/profile', updateProfile);
 
-router.put("/parent/change-password", changePassword )
+router.put("/change-password", changePassword )
 
 module.exports = router;
